@@ -2,6 +2,17 @@ module Test;
 
 
 global protocol Proto1(role A, role B) {
+    mixed {
+        1() from A to B;
+        2() from B to A;
+    } or A->B {
+        3() from B to A;
+    }
+}
+
+
+/*
+global protocol Proto1(role A, role B) {
     1() from A to B;
     rec X {
         choice at B {
@@ -29,3 +40,4 @@ global protocol Proto1(role A, role B) {
         }
     }
 }
+//*/

@@ -2,6 +2,7 @@ import org.scribble.ast.global.*
 import org.scribble.ast.name.simple.{OpNode, RecVarNode, RoleNode}
 import org.scribble.ast.{Module, MsgNode, SigLitNode}
 import org.scribble.core.`type`.name.{DataName, GProtoName, ModuleName, PayElemType}
+import org.scribble.ext.gt.ast.global.GTGMixed
 import org.scribble.ext.gt.cli.GTCommandLine2
 
 import scala.jdk.CollectionConverters.*
@@ -49,8 +50,16 @@ def translateNode(p: GSessionNode): GType = p match {
         case x: GChoice => translateGChoice(x)
         case x: GRecursion => translateGRecursion(x)
         case x: GContinue => translateGContinue(x)
+        case x: GTGMixed => translateGMixed(x)
         case _ => throw new RuntimeException(s"TODO: $p")
     }
+
+def translateGMixed(x: GTGMixed): GMixed = GMixed(
+    nextMid,
+    translateSeq(x.getLeftBlockChild.getInteractSeqChild),
+    translateRoleNode(x.getOtherChild),
+    translateRoleNode(x.getObserverChild),
+    translateSeq(x.getRightBlockChild.getInteractSeqChild))
 
 def translateGChoice(x: GChoice): GInteraction =
     val src = translateRoleNode(x.getSubjectChild)
@@ -114,6 +123,20 @@ trait GType {
     def subs(x: Map[RecVar, GType]): GType
     def unfold: GType = this
     def unfoldAllImmediate: GType = this
+}
+
+type MId = Int
+
+private var MIdCounter = 0
+def nextMid =
+    MIdCounter = MIdCounter + 1
+    MIdCounter
+
+class GMixed(id: MId, left: GType, other: Role, obs: Role, right: GType) extends GType {
+    override def subs(x: Map[RecVar, GType]): GType =
+        GMixed(this.id, this.left.subs(x), this.other, this.obs, this.right.subs(x))
+    override def toString: String =
+        s"[${this.left} ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.other},${this.obs} ${this.right}]"
 }
 
 object GEnd extends GType {
