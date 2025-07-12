@@ -25,12 +25,11 @@ public class GTCommandLine2 extends CommandLine {
     // Used in GTJob
     public static List<Pair<String, String[]>> ARGS;
 
-    // i.e., check Correspondence (modulo GTCLFlags.NO_CORRESPONDENCE flag)
-    protected Optional<Exception> gtMain() {
-        getTranslated(this);
-        return Optional.empty();
-    }
 
+    // i.e., check Correspondence (modulo GTCLFlags.NO_CORRESPONDENCE flag)
+    public Map<ModuleName, Module> gtMain() {
+        return getTranslated(this);
+    }
 
 
 
@@ -61,36 +60,29 @@ public class GTCommandLine2 extends CommandLine {
 
     public GTCommandLine2(String... args) {
         super(args);
-    }
 
-    public static void main(String[] args) {
-        GTCommandLine2 cl = init(args);
-        Optional<Exception> run = cl.gtMain();
-        if (run.isPresent()) {
-            throw new RuntimeException(run.get());
-        }
-    }
-
-    public static Optional<Exception> mainTest(String[] args) {
-        GTCommandLine2 cl = init(args);
-        return cl.gtMain();
-    }
-
-    static GTCommandLine2 init(String[] args) {
-        GTCommandLine2 cl = new GTCommandLine2(args);
-
-        GTCommandLine2.ARGS = cl.args;
-
+        GTCommandLine2.ARGS = this.args;
         try {
-            cl.run();
+            run();
         } catch (CommandLineException | AntlrSourceException x) {
             throw new RuntimeScribException(x);
         }
-        return cl;
     }
 
+    public static void main(String[] args) {
+        GTCommandLine2 cl = new GTCommandLine2(args);
+        //Optional<Exception> run =
+        cl.gtMain();
+        //run.forEach(_x -> throw new RuntimeException(run.get()));
+    }
+
+    /*public static Optional<Exception> mainTest(String[] args) {
+        GTCommandLine2 cl = init(args);
+        return cl.gtMain();
+    }*/
+
     //static Map<GProtoName, GTGType> getTranslated(GTCommandLine2 cl) {
-    static void getTranslated(GTCommandLine2 cl) {
+    static Map<ModuleName, Module> getTranslated(GTCommandLine2 cl) {
         //Map<GProtoName, GTGType> res = new HashMap<>();
 
         Job job = cl.getJob();
@@ -117,6 +109,8 @@ public class GTCommandLine2 extends CommandLine {
             }
         }
         //return res;
+
+        return parsed;
     }
 
     @Override
