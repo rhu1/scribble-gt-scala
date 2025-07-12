@@ -3,5 +3,29 @@ module Test;
 
 global protocol Proto1(role A, role B) {
     1() from A to B;
-    2() from B to A;
+    rec X {
+        choice at B {
+            2() from B to A;
+            continue X;
+        } or {
+            choice at B {
+                3() from B to A;
+            } or {
+                rec Y {
+                    4() from B to A;
+                    continue Y;
+                }
+            } or {
+                rec Z {
+                    choice at B {
+                        6() from B to A;
+                        continue X;
+                    } or {
+                        7() from B to A;
+                        continue Z;
+                    }
+                }
+            }
+        }
+    }
 }
