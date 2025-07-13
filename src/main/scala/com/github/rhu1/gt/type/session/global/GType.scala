@@ -1,7 +1,7 @@
 package com.github.rhu1.gt.`type`.session.global
 
 import com.github.rhu1.gt.`type`.session.*
-import com.github.rhu1.gt.util.ConsoleColours
+import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 
 import scala.collection.immutable.ListMap
 
@@ -19,6 +19,10 @@ trait GType extends SType {
     def unfoldAllOnce: GType = unfoldAllOnceAux(Set())
 
     protected[global] def unfoldAllOnceAux(done: Set[RecVar]): GType
+
+    def isDiverging(r: Role): Boolean
+
+    def getLiveRoles: Set[Role]
 
     def getMids: Set[Mid]
 
@@ -44,27 +48,23 @@ trait GType extends SType {
             })
         getMids.exists(c => checkIsect(getCommitting(c), getNotCommitting(c)))
 
-    // strict deps
     def getSyntacticStrictDeps: Map[Role, Set[Role]]
-    // eventual deps
 
-    // single-decision
-    // clear-termination
+    def getSyntacticEventualDeps: Map[Role, Set[Role]]
 
-    // balance
+    def isSingleDecision: Boolean
+
+    def isClearTermination: Boolean
+
+    def isBalanced: Boolean = unfoldAllOnce |> (_.isBalancedAux)
+
+    protected[global] def isBalancedAux: Boolean
+
 
     /* dynamics */
+
     // wiggly
     // active mixed
-
-    // local static
-    // syntax
-    // projection
-
-    // local dynamics
-    // path
-    // queue
-    // system
 }
 
 object GType {
@@ -81,14 +81,12 @@ object GType {
             acc + (c -> mergeRoleOps(acc.getOrElse(c, Map()), rops))
         })*/
 
-    def isectStrictDeps(x: Map[Role, Set[Role]], y: Map[Role, Set[Role]]): Map[Role, Set[Role]] =
+    def isectDeps(x: Map[Role, Set[Role]], y: Map[Role, Set[Role]]): Map[Role, Set[Role]] =
         x.keySet.intersect(y.keySet).map(r => (
             r,
             //(for { xr <- x.get(r); yr <- y.get(r); res = xr.intersect(yr) } yield res).get
             //(x.get(r), y.get(r)) match { case (Some(xr), Some(yr)) => xr.intersect(yr)}
-            {
-                val (xr, yr) = (x.getOrElse(r, Set()), y.getOrElse(r, Set())); xr.intersect(yr)
-            }
+            { val (xr, yr) = (x.getOrElse(r, Set()), y.getOrElse(r, Set())); xr.intersect(yr) }
         )).toMap
 }
 
@@ -109,6 +107,10 @@ case class GInteraction(
     override def unfoldAllOnceAux(done: Set[RecVar]): GInteraction =
         GInteraction(this.src, this.dst,
             this.cases.map((k, v) => (k, v.unfoldAllOnceAux(done))))
+
+    override def isDiverging(r: Role): Boolean = this.cases.forall(x => x._2.isDiverging(r))
+
+    override def getLiveRoles: Set[Role] = Set(this.src, this.dst) ++ this.cases.flatMap(_._2.getLiveRoles)
 
     override def getMids: Set[Mid] = this.cases.flatMap(_._2.getMids).toSet
 
@@ -135,7 +137,7 @@ case class GInteraction(
         }
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] =
-        var nested = this.cases.values.map(_.getSyntacticStrictDeps).reduce(GType.isectStrictDeps)
+        var nested = this.cases.values.map(_.getSyntacticStrictDeps).reduce(GType.isectDeps)
         nested = nested + (this.src -> (nested.getOrElse(this.src, Set()) - this.dst))
         def shouldUp(r: Role): Boolean = !nested.getOrElse(r, Set()).contains(this.src)
         var up = if (shouldUp(this.dst)) Set(this.dst) else Set()  // Pre: need to updated nested
@@ -148,6 +150,31 @@ case class GInteraction(
             })
         }
         nested
+
+    // !!! in-built transitivity (like strict), unlike formal eventual...
+    override def getSyntacticEventualDeps: Map[Role, Set[Role]] =
+        var nested = this.cases.values.map(_.getSyntacticStrictDeps).reduce(GType.isectDeps)
+        // ...same as strict except don't remove this.src << this.dst
+        def shouldUp(r: Role): Boolean = !nested.getOrElse(r, Set()).contains(this.src)
+        var up = if (shouldUp(this.dst)) Set(this.dst) else Set()  // Pre: need to updated nested
+        while (up.nonEmpty) {  // fix
+            up.foreach(r => {
+                up = up - r
+                val curr = nested.getOrElse(r, Set())
+                nested = nested + (r -> (curr + this.src))
+                up = up ++ nested.filter((r1, ds) => ds.contains(r) && shouldUp(r1)).keys
+            })
+        }
+        nested
+
+    override def isSingleDecision: Boolean = this.cases.forall(_._2.isSingleDecision)
+
+    override def isClearTermination: Boolean = this.cases.forall(_._2.isClearTermination)
+
+    override protected[global] def isBalancedAux: Boolean =
+        val fst = this.cases.head._2.getLiveRoles -- Set(this.src, this.dst)
+        this.cases.slice(1, this.cases.size)
+            .forall(x => (x._2.getLiveRoles -- Set(this.src, this.dst)) == fst)
 
     /* ... */
 
@@ -181,6 +208,10 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
         GMixed(id, this.left.unfoldAllOnceAux(done), this.other, this.obs,
             this.right.unfoldAllOnceAux(done))
 
+    override def isDiverging(r: Role): Boolean = this.left.isDiverging(r) && this.right.isDiverging(r)
+
+    override def getLiveRoles: Set[Role] = this.left.getLiveRoles ++ this.right.getLiveRoles
+
     override def getMids: Set[Mid] = this.left.getMids ++ this.right.getMids + this.id
 
     /* ... */
@@ -210,7 +241,26 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
         }
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] =
-        GType.isectStrictDeps(this.left.getSyntacticStrictDeps, this.right.getSyntacticStrictDeps)
+        GType.isectDeps(this.left.getSyntacticStrictDeps, this.right.getSyntacticStrictDeps)
+
+    override def getSyntacticEventualDeps: Map[Role, Set[Role]] =
+        GType.isectDeps(this.left.getSyntacticStrictDeps, this.right.getSyntacticStrictDeps)
+
+    override def isSingleDecision: Boolean =
+        val R = getLiveRoles
+        val dr = this.right.getSyntacticStrictDeps
+        R.subsetOf(dr.keySet) && dr.forall(_._2.contains(obs)) &&
+            this.left.isSingleDecision && this.right.isSingleDecision
+
+    override def isClearTermination: Boolean =
+        val R = getLiveRoles
+        val dr = this.right.getSyntacticEventualDeps
+        R.subsetOf(dr.keySet) &&
+            dr.forall((r, ds) => this.right.isDiverging(r) || ds.contains(obs)) &&
+            this.left.isClearTermination && this.right.isClearTermination
+
+    override protected[global] def isBalancedAux: Boolean =
+        this.left.getLiveRoles == this.right.getLiveRoles
 
     /* ... */
 
@@ -234,14 +284,24 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
         if (done.contains(this.rvar)) {
             this
         } else {
-            unfold.unfoldAllOnceAux(done + this.rvar)
+            unfold |> (_.unfoldAllOnceAux(done + this.rvar))
         }
-
-    override def getMids: Set[Mid] = this.body.getMids
 
     override def unfold: GType = this.body.subs(Map(this.rvar -> this))
 
-    override def unfoldAllImmediate: GType = unfold.unfold // Assumes contractive...
+    override def unfoldAllImmediate: GType = unfold |> (_.unfold) // Assumes contractive...
+
+    override def isDiverging(r: Role): Boolean =
+        val R = getLiveRoles
+        if (R.contains(r)) {  // !!! Assumes projection
+            this.body.isDiverging(r)
+        } else {
+            false
+        }
+
+    override def getLiveRoles: Set[Role] = this.body.getLiveRoles
+
+    override def getMids: Set[Mid] = this.body.getMids
 
     /* ... */
 
@@ -252,6 +312,15 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
         this.body.getNotCommittingAux(c, com)
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = this.body.getSyntacticStrictDeps
+
+    override def getSyntacticEventualDeps: Map[Role, Set[Role]] = this.body.getSyntacticStrictDeps
+
+    override def isSingleDecision: Boolean = this.body.isSingleDecision
+
+    override def isClearTermination: Boolean = this.body.isClearTermination
+
+    override protected[global] def isBalancedAux: Boolean = this.body.isBalanced
+
 
     /* ... */
 
@@ -271,6 +340,10 @@ case class GRecVar(rvar: RecVar) extends GType {
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
 
+    override def isDiverging(r: Role): Boolean = true  // Assumes pruning by GRec case
+
+    override def getLiveRoles: Set[Role] = Set()
+
     override def getMids: Set[Mid] = Set()
 
     /* ... */
@@ -280,6 +353,14 @@ case class GRecVar(rvar: RecVar) extends GType {
     override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = Map()
+
+    override def getSyntacticEventualDeps: Map[Role, Set[Role]] = Map()
+
+    override def isSingleDecision: Boolean = true
+
+    override def isClearTermination: Boolean = true
+
+    override protected[global] def isBalancedAux: Boolean = true
 
     /* ... */
 
@@ -299,6 +380,10 @@ object GEnd extends GType {
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
 
+    override def isDiverging(r: Role): Boolean = false
+
+    override def getLiveRoles: Set[Role] = Set()
+
     override def getMids: Set[Mid] = Set()
 
     /* ... */
@@ -308,6 +393,14 @@ object GEnd extends GType {
     override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = Map()
+
+    override def getSyntacticEventualDeps: Map[Role, Set[Role]] = Map()
+
+    override def isSingleDecision: Boolean = true
+
+    override def isClearTermination: Boolean = true
+
+    override protected[global] def isBalancedAux: Boolean = true
 
     /* ... */
 
