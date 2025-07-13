@@ -35,10 +35,12 @@ object Scrib2GT {
 
     def translateGMixed(x: GTGMixed): GMixed = GMixed(
         nextMid,
-        translateSeq(x.getLeftBlockChild.getInteractSeqChild),
+        translateSeq(x.getLeftBlockChild.getInteractSeqChild)
+            .unfoldAllImmediate.asInstanceOf[GInteraction],
         translateRoleNode(x.getOtherChild),
         translateRoleNode(x.getObserverChild),
-        translateSeq(x.getRightBlockChild.getInteractSeqChild))
+        translateSeq(x.getRightBlockChild.getInteractSeqChild)
+            .unfoldAllImmediate.asInstanceOf[GInteraction])
 
     def translateGChoice(x: GChoice): GInteraction =
         val src = translateRoleNode(x.getSubjectChild)
