@@ -259,14 +259,14 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
         GType.isectDeps(this.left.getSyntacticStrictDeps, this.right.getSyntacticStrictDeps)
 
     override def isSingleDecision: Boolean =
-        val R = getLiveRoles
-        val dr = this.right.getSyntacticStrictDeps
+        val R = getLiveRoles - this.obs
+        val dr = this.right.getSyntacticStrictDeps - this.obs
         R.subsetOf(dr.keySet) && dr.forall(_._2.contains(obs)) &&
             this.left.isSingleDecision && this.right.isSingleDecision
 
     override def isClearTermination: Boolean =
-        val R = getLiveRoles
-        val dr = this.right.getSyntacticEventualDeps
+        val R = getLiveRoles - this.obs
+        val dr = this.right.getSyntacticEventualDeps - this.obs
         R.subsetOf(dr.keySet) &&
             dr.forall((r, ds) => this.right.isDiverging(r) || ds.contains(obs)) &&
             this.left.isClearTermination && this.right.isClearTermination
