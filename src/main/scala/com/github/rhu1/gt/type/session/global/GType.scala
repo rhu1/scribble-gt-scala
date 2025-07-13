@@ -75,17 +75,16 @@ case class GRecVar(rvar: RecVar) extends GType {
 }
 
 case class GInteraction(
-                           src: Role,
-                           dst: Role,
-                           cases: Map[(Op, Payload), GType]
-                       ) extends GType {
+        src: Role,
+        dst: Role,
+        cases: Map[(Op, Payload), GType]
+    ) extends GType {
 
     override def subs(x: Map[RecVar, GType]): GType =
         GInteraction(this.src, this.dst, this.cases.map((k, v) => (k, v.subs(x))))
 
     def casesToString: String =
         def msgToString(x: (Op, Payload)) = s"${x._1}(${x._2})"
-
         if (cases.size == 1) {
             val c = cases.head
             s"${msgToString(c._1)} . ${c._2}"
