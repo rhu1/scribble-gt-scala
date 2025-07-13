@@ -32,9 +32,9 @@ trait GType extends SType {
         getMids.map(c => (c, getCommitting(c))).toMap
 
     def getCommitting(c: Mid): Map[Role, Set[Op]] =
-        unfoldAllOnce.getCommittingAux(c, Set())
+        unfoldAllOnce |> (_.getCommittingAux(c, Set()))
     def getNotCommitting(c: Mid): Map[Role, Set[Op]] =
-        unfoldAllOnce.getNotCommittingAux(c, Set())
+        unfoldAllOnce |> (_.getNotCommittingAux(c, Set()))
 
     protected[global] def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]]
     protected[global] def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]]
@@ -47,6 +47,7 @@ trait GType extends SType {
                 ox.intersect(oy).nonEmpty
             })
         }
+        println(s"22222: ${getCommitting(1)} ,, ${getNotCommitting(1)}")
         !getMids.exists(c => checkIsect(getCommitting(c), getNotCommitting(c)))
 
     def getSyntacticStrictDeps: Map[Role, Set[Role]]
@@ -125,21 +126,25 @@ case class GInteraction(
         if (!com.contains(this.dst) && com.contains(this.src)) {
             val tmp = com + this.dst
             val imm = Map(this.dst -> this.cases.keySet.map((op, _) => op))
-            (Seq(imm) ++ this.cases.map(x => x._2.getCommittingAux(c, tmp))).reduce(GType.mergeRoleOps)
+            (Seq(imm) ++ this.cases.values.map(_.getCommittingAux(c, tmp)))
+                .reduce(GType.mergeRoleOps)
         } else {
             this.cases.map(x => x._2.getCommittingAux(c, com)).reduce(GType.mergeRoleOps)
         }
 
     override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (!com.contains(this.dst) && com.contains(this.src)) {
-            val imm = Map(this.src -> this.cases.keySet.map((op, _) => op))
-            (Seq(imm) ++ this.cases.map(x => x._2.getNotCommittingAux(c, com))).reduce(GType.mergeRoleOps)
+            //val imm = Map(this.src -> this.cases.keySet.map((op, _) => op))
+            val imm = Map[Role, Set[Op]]()  // !!! ignoring sender ops...
+            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(c, com)))
+                .reduce(GType.mergeRoleOps)
         } else {
             val tmp = com + this.dst
             val imm = Map(
-                this.src -> this.cases.keySet.map((op, _) => op),
+                //this.src -> this.cases.keySet.map((op, _) => op),  // !!! ignoring sender ops...
                 this.dst -> this.cases.keySet.map((op, _) => op))
-            (Seq(imm) ++ this.cases.map(x => x._2.getNotCommittingAux(c, tmp))).reduce(GType.mergeRoleOps)
+            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(c, tmp)))
+                .reduce(GType.mergeRoleOps)
         }
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] =
@@ -224,14 +229,18 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     override def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (c == this.id) {
-            val ops_r = this.right.cases.keySet.map((op, pay) => op)
+            val ops_r = this.right.cases.keySet.map((op, _) => op)
             val imm = Map(
                 this.other -> ops_r,
-                this.obs -> (this.left.cases.keySet.map((op, pay) => op) ++ ops_r))
+                //this.obs -> (this.left.cases.keySet.map((op, _) => op) ++ ops_r)  // !!! ignoring sender ops...
+            )
             val left = this.left.cases.values.map(_.getCommittingAux(c, com + this.obs))
             val right = this.right.cases.values.map(_.getCommittingAux(c, com ++ Set(this.obs, this.other)))
             //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
-            right.foldLeft(left.foldLeft(imm)(GType.mergeRoleOps))(GType.mergeRoleOps)
+
+            val res = right.foldLeft(left.foldLeft(imm)(GType.mergeRoleOps))(GType.mergeRoleOps)
+            println(s"3333: ${c}: ${res}")
+            res
         } else {
             //GType.mergeRoleOps(this.left.getCommittingAux(c, com), this.right.getCommittingAux(c, com))
             val left = this.left.cases.values.map(_.getCommittingAux(c, com))
