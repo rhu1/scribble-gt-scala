@@ -1,3 +1,6 @@
+package com.github.rhu1.gt
+
+import com.github.rhu1.gt.util.ConsoleColours
 import org.scribble.ast.global.*
 import org.scribble.ast.name.simple.{OpNode, RecVarNode, RoleNode}
 import org.scribble.ast.{Module, MsgNode, SigLitNode}
@@ -123,6 +126,29 @@ trait GType {
     def subs(x: Map[RecVar, GType]): GType
     def unfold: GType = this
     def unfoldAllImmediate: GType = this
+
+    // global static
+    // committing
+    // not committing
+    // well-formed
+    // strict deps
+    // eventual deps
+    // single-decision
+    // clear-termination
+    // balance
+
+    // global dynamics
+    // wiggly
+    // active mixed
+
+    // local static
+    // syntax
+    // projection
+
+    // local dynamics
+    // path
+    // queue
+    // system
 }
 
 type MId = Int

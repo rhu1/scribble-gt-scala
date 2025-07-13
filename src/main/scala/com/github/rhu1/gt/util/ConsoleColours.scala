@@ -1,3 +1,5 @@
+package com.github.rhu1.gt.util
+
 object ConsoleColours {
     
     val WHITE_TRIANGLE = '\u25B7'
