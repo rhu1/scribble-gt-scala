@@ -8,7 +8,7 @@ object Util {
 
 /* ... */
 
-implicit class PipeForwards[A](a: A) extends AnyVal {
+implicit class PipeForwards[A](a: A) {
     def |>[B](f: A => B): B = f(a)
 }
 

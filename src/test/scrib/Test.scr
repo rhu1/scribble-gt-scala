@@ -1,6 +1,7 @@
 module Test;
 
 
+/*
 global protocol Proto1(role A, role B) {
     mixed {
         1() from A to B;
@@ -9,9 +10,10 @@ global protocol Proto1(role A, role B) {
         3() from B to A;
     }
 }
+//*/
 
 
-/*
+//*
 global protocol Proto1(role A, role B) {
     1() from A to B;
     rec X {

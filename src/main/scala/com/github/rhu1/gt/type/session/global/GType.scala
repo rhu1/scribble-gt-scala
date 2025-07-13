@@ -3,6 +3,8 @@ package com.github.rhu1.gt.`type`.session.global
 import com.github.rhu1.gt.`type`.session.*
 import com.github.rhu1.gt.util.ConsoleColours
 
+import scala.collection.immutable.ListMap
+
 
 trait GType extends SType {
     def subs(x: Map[RecVar, GType]): GType
@@ -13,6 +15,7 @@ trait GType extends SType {
 
     // global static
     // committing
+    //def getCommitting(com: Set[Role]): Map[Integer, Map[Role, Op]]
     // not committing
     // well-formed
     // strict deps
@@ -77,7 +80,7 @@ case class GRecVar(rvar: RecVar) extends GType {
 case class GInteraction(
         src: Role,
         dst: Role,
-        cases: Map[(Op, Payload), GType]
+        cases: ListMap[(Op, Payload), GType]
     ) extends GType {
 
     override def subs(x: Map[RecVar, GType]): GType =

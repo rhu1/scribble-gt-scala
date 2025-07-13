@@ -10,6 +10,7 @@ import org.scribble.ast.{MsgNode, SigLitNode}
 import org.scribble.core.`type`.name.{DataName, PayElemType}
 import org.scribble.ext.gt.ast.global.GTGMixed
 
+import scala.collection.immutable.ListMap
 import scala.jdk.CollectionConverters.*
 
 
@@ -48,7 +49,7 @@ object Scrib2GT {
                 |> (_.asInstanceOf[GInteraction]))
         val dst = bs.head.dst
         if (bs.forall(x => x.src == src && x.dst == dst)) {
-            GInteraction(src, dst, bs.flatMap(x => x.cases).toMap)
+            GInteraction(src, dst, ListMap(bs.flatMap(x => x.cases.toSeq).toSeq: _*))
         } else {
             throw new RuntimeException("Inconsistent choice ")
         }
@@ -65,7 +66,7 @@ object Scrib2GT {
         GInteraction(
             translateRoleNode(x.getSourceChild),
             translateRoleNode(dst),
-            Map(translateMsgNode(x.getMessageNodeChild) -> y)
+            ListMap(translateMsgNode(x.getMessageNodeChild) -> y)
         )
 
     def translateRoleNode(x: RoleNode): Role = Role(x.toString)
