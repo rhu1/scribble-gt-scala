@@ -23,11 +23,22 @@ object Main {
 
         val parsed = collection.immutable.Map(
             new GTCommandLine2("-fair", "-v", System.getProperty("user.dir") + "\\src\\test\\scrib\\Test.scr").gtMain().asScala.toList: _*)
-        println("\n[GT] Translated:")
 
+        println("\n[GT] Translating:")
         val translated = getTranslatedProtocols(parsed)
-
         println(s"\n${translated}")
+
+        println("\n[GT] Validating:")
+        translated.foreach((n, p) => println(s"$n: ${p.isValid}"))
+
+        val tmp = translated.iterator.next()
+        val p = tmp._2
+        println(s"${tmp._1}")
+        println(s"${p.isWellFormed}")
+        println(s"${p.isSingleDecision}")
+        println(s"${p.isClearTermination}")
+        println(s"${p.isBalanced}")
+
     }
 
     def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
