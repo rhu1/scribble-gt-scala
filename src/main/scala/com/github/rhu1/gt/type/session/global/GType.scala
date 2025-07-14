@@ -22,7 +22,7 @@ trait GType extends SType {
 
     def isDiverging(r: Role): Boolean = isDivergingAux(Set(), r)
 
-    protected[global] def isDivergingAux(env: Set[RecVar], r: Role): Boolean
+    protected[global] def isDivergingAux(entered: Set[RecVar], r: Role): Boolean
 
     def getLiveRoles: Set[Role]
 
@@ -121,7 +121,8 @@ case class GInteraction(
         GInteraction(this.src, this.dst,
             this.cases.map((k, v) => (k, v.unfoldAllOnceAux(done))))
 
-    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean = this.cases.forall(x => x._2.isDivergingAux(env, r))
+    override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean =
+        this.cases.forall(x => x._2.isDivergingAux(entered, r))
 
     override def getLiveRoles: Set[Role] = Set(this.src, this.dst) ++ this.cases.flatMap(_._2.getLiveRoles)
 
@@ -230,8 +231,8 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
         GMixed(id, this.left.unfoldAllOnceAux(done), this.other, this.obs,
             this.right.unfoldAllOnceAux(done))
 
-    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean =
-        this.left.isDivergingAux(env, r) && this.right.isDivergingAux(env, r)
+    override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean =
+        this.left.isDivergingAux(entered, r) && this.right.isDivergingAux(entered, r)
 
     override def getLiveRoles: Set[Role] = this.left.getLiveRoles ++ this.right.getLiveRoles
 
@@ -341,10 +342,10 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     override def unfoldAllImmediate: GType = unfold |> (_.unfold) // Assumes contractive...
 
-    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean =
+    override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean =
         val R = getLiveRoles
         if (R.contains(r)) {  // !!! Assumes projection
-            this.body.isDivergingAux(env + this.rvar, r)
+            this.body.isDivergingAux(entered + this.rvar, r)
         } else {
             false
         }
@@ -393,7 +394,8 @@ case class GRecVar(rvar: RecVar) extends GType {
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
 
-    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean = env.contains(this.rvar)  // Assumes pruning by GRec case
+    override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean =
+        entered.contains(this.rvar)  // Assumes pruning by GRec case
 
     override def getLiveRoles: Set[Role] = Set()
 
@@ -433,7 +435,7 @@ object GEnd extends GType {
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
 
-    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean = false
+    override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean = false
 
     override def getLiveRoles: Set[Role] = Set()
 
