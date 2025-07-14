@@ -47,7 +47,7 @@ trait GType extends SType {
                 ox.intersect(oy).nonEmpty
             })
         }
-        println(s"22222: ${getCommitting(1)} ,, ${getNotCommitting(1)}")
+        //println(s"WF2222: ${getCommitting(1)} ,, ${getNotCommitting(1)}")
         !getMids.exists(c => checkIsect(getCommitting(c), getNotCommitting(c)))
 
     def getSyntacticStrictDeps: Map[Role, Set[Role]]
@@ -239,7 +239,7 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
             //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
 
             val res = right.foldLeft(left.foldLeft(imm)(GType.mergeRoleOps))(GType.mergeRoleOps)
-            println(s"3333: ${c}: ${res}")
+            //println(s"WF3333: ${c}: ${res}")
             res
         } else {
             //GType.mergeRoleOps(this.left.getCommittingAux(c, com), this.right.getCommittingAux(c, com))
@@ -275,10 +275,10 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     override def isClearTermination: Boolean =
         val R = getLiveRoles - this.obs
-        val dr = this.right.getSyntacticEventualDeps - this.obs
+        val dr = this.left.getSyntacticEventualDeps - this.obs
         R.subsetOf(dr.keySet) &&
-            dr.forall((r, ds) => this.right.isDiverging(r) || ds.contains(obs)) &&
-            this.left.isClearTermination && this.right.isClearTermination
+            dr.forall((r, ds) => this.left.isDiverging(r) || ds.contains(obs)) &&
+                this.left.isClearTermination && this.right.isClearTermination
 
     override protected[global] def isBalancedAux: Boolean =
         this.left.getLiveRoles == this.right.getLiveRoles
