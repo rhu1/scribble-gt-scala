@@ -1,6 +1,7 @@
 package com.github.rhu1.gt.`type`.session.global
 
 import com.github.rhu1.gt.`type`.session.*
+import com.github.rhu1.gt.`type`.session.local.*
 import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 
 import scala.collection.immutable.ListMap
@@ -34,6 +35,10 @@ trait GRuntimeType extends GType {
 
 }
 
+
+
+/* ... */
+
 case class GWiggly(
            src: Role,
            dst: Role,
@@ -60,6 +65,10 @@ case class GWiggly(
     override def getMids: Set[Mid] = this.cont.flatMap(_._2.getMids).toSet
 
     /* ... */
+
+    /* ... */
+
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] = throw new RuntimeException("TODO")
 
     /* ... */
 
@@ -110,6 +119,10 @@ class GActiveMixed(
     override def getMids: Set[Mid] = this.left.getMids ++ this.right.getMids + this.id
 
     /* ... */
+
+    /* ... */
+
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] = throw new RuntimeException("TODO")
 
     /* ... */
 

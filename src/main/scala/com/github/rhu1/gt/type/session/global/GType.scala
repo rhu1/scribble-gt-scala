@@ -1,6 +1,7 @@
 package com.github.rhu1.gt.`type`.session.global
 
 import com.github.rhu1.gt.`type`.session.*
+import com.github.rhu1.gt.`type`.session.local.*
 import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 
 import scala.collection.immutable.ListMap
@@ -74,6 +75,15 @@ trait GType extends SType {
     def isValid: Boolean = isWellFormed && isAware && isBalanced
 
 
+    /* projection */
+
+    def project(r: Role): Option[LType] = rproject(r).map(_._1)
+
+    def rproject(r: Role): Option[(LType, Sigma)] = rprojectAux(EPSILON, r)
+
+    protected[global] def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)]
+
+
     /* dynamics */
 
     /*def getActions: Set[GAction]
@@ -82,17 +92,9 @@ trait GType extends SType {
 }
 
 
-sealed trait GAction { }
-case class GSend(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
-    override def toString: String = s"$src!$dst:$op($pay)"
-}
-case class GRecv(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
-    override def toString: String = s"$src?$dst:$op($pay)"  // pq?a -- p is sender
-}
-case class Nu() extends GAction {}
-
-
 object GType {
+
+    /* ... */
 
     def mergeRoleOps(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Map[Role, Set[Op]] =
         y.foldLeft(x)({ case (acc, (r, ops)) =>
@@ -225,6 +227,33 @@ case class GInteraction(
 
     /* ... */
 
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+        for {
+            (cases, sigmas) <- this.cases.foldLeft
+                (Option((ListMap.empty[(Op, Payload), LType], List.empty[Sigma]))) {
+                    case (None, _) => None
+                    case (Some(acc), (k, g)) =>
+                        g.rprojectAux(pi, r).map(y => (acc._1 + ((k, y._1)), acc._2 :+ y._2))
+                }
+            cs <-
+                if (r == this.src) {
+                    Some(LSelect(this.dst, cases))
+                } else if (r == this.dst) {
+                    Some(LBranch(this.src, cases))
+                } else {
+                    cases.values.tail.foldLeft(Option(cases.values.head)) {  // cases non-empty
+                            case (None, _) => None
+                            case (Some(acc), x) => LType.merge(acc, x)
+                        }
+                }
+            s <- sigmas.tail.foldLeft(Option(sigmas.head)) {
+                    case (None, _) => None
+                    case (Some(acc), x) => LType.mergeSigma(acc, x)
+                }
+        } yield (cs, s)
+
+    /* ... */
+
     /* ... */
 
     override def toString: String =
@@ -334,6 +363,20 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+        for {
+            left <- this.left.rprojectAux(pi, r)
+            right <- this.right.rprojectAux(pi, r)
+            s0 <- if (left._2 == right._2) Some(left._2) else None
+            obs <- right._1 match {
+                case LSelect(_, _) => Some(this.obs)
+                case LBranch(src, _) => Some(src)
+                case _ => None
+            }
+        } yield (LMixed(this.id, left._1, obs, right._1), s0)
+
+    /* ... */
+
     override def toString: String =
         s"[${this.left} ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.other},${this.obs} ${this.right}]"
 }
@@ -395,6 +438,19 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     /* ... */
 
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+        for {
+            (b, s) <- this.body.rprojectAux(pi, r)
+            b1 = b match {
+                case LEnd => LEnd
+                case LRecVar(v) => if (v == this.rvar) LEnd else LRecVar(v)
+                case _ => LRec(this.rvar, b)
+            }
+            s1 <- if (s.isEmpty) Some(EMPTY_SIGMA) else None
+        } yield (b1, s1)
+
+    /* ... */
+    
     /* ... */
 
     override def toString: String = s"rec ${this.rvar} . ${this.body}"
@@ -436,6 +492,11 @@ case class GRecVar(rvar: RecVar) extends GType {
 
     /* ... */
 
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+        Some((LRecVar(this.rvar), EMPTY_SIGMA))
+        
+    /* ... */
+    
     /* ... */
 
     override def toString: String = rvar.toString
@@ -476,6 +537,11 @@ object GEnd extends GType {
 
     /* ... */
 
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] = 
+        Some((LEnd, EMPTY_SIGMA))
+        
+    /* ... */
+    
     /* ... */
 
     override def toString: String = "end"
@@ -490,3 +556,15 @@ private var MIdCounter = 0
 def nextMid =
     MIdCounter = MIdCounter + 1
     MIdCounter
+
+
+/* ... */
+
+sealed trait GAction { }
+case class GSend(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
+    override def toString: String = s"$src!$dst:$op($pay)"
+}
+case class GRecv(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
+    override def toString: String = s"$src?$dst:$op($pay)"  // pq?a -- p is sender
+}
+case class Nu() extends GAction {}

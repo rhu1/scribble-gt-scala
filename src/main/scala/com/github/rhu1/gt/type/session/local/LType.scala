@@ -16,15 +16,54 @@ trait LType extends SType {
     /*def unfoldAllOnce: LType = unfoldAllOnceAux(Set())
     protected[global] def unfoldAllOnceAux(done: Set[RecVar]): LType*/
 
-    // local static
-    // syntax
-    // projection
-
     // local dynamics
     // path
     // queue
     // system
+
+    /*def getActions: Set[GAction]
+
+    def step(a: GAction): Either[String, GType]*/
 }
+
+object LType {
+
+    def merge(x: LType, y: LType): Option[LType] =
+        if (x == y) {
+            Some(x)
+        } else {
+            (x, y) match {
+                case (LBranch(src1, cases1), LBranch(src2, cases2)) => None
+                case (LRec(rvar1, body1), LRec(rvar2, body2)) =>
+                    if (rvar1 == rvar2) {
+                        merge(body1, body2).map(z => LRec(rvar1, z))
+                    } else {
+                        None
+                    }
+                case _ => None  // !!! no MC cases
+            }
+        }
+
+    def mergeSigma(x: Sigma, y: Sigma): Option[Sigma] = if (x == y) Some(x) else None
+}
+
+
+/* ... */
+
+case class Msg(op: Op, pi: Path) {}
+
+type Sigma = Map[Role, List[Msg]]
+val EMPTY_SIGMA = Map.empty[Role, List[Msg]]
+
+sealed trait pLR {}
+case class pL() extends pLR {}
+case class pR() extends pLR {}
+
+type Path = List[pLR]
+val EPSILON: Path = List[pLR]()
+
+
+/* ... */
 
 case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LType {
 
@@ -135,11 +174,11 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
 case class LRecVar(rvar: RecVar) extends LType {
 
     /* ... */
-    
+
     override def subs(x: Map[RecVar, LType]): LType = x.getOrElse(this.rvar, this)
 
     /* ... */
-    
+
     /* ... */
 
     override def toString: String = rvar.toString
