@@ -6,6 +6,7 @@ import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 import scala.collection.immutable.ListMap
 
 
+// Means runtime only
 trait GRuntimeType extends GType {
 
     override protected[global] def isBalancedAux: Boolean =
@@ -45,18 +46,18 @@ case class GWiggly(
     /* ... */
 
     override def subs(x: Map[RecVar, GType]): GWiggly =
-        GWiggly(this.src, this.dst, this.op, this.cases.map((k, v) => (k, v.subs(x))))
+        GWiggly(this.src, this.dst, this.op, this.cont.map((k, v) => (k, v.subs(x))))
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GWiggly =
         GWiggly(this.src, this.dst, this.op,
-            this.cases.map((k, v) => (k, v.unfoldAllOnceAux(done))))
+            this.cont.map((k, v) => (k, v.unfoldAllOnceAux(done))))
 
     override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean =
-        this.cases.forall(x => x._2.isDivergingAux(entered, r))
+        this.cont.forall(x => x._2.isDivergingAux(entered, r))
 
-    override def getLiveRoles: Set[Role] = Set(this.src, this.dst) ++ this.cases.flatMap(_._2.getLiveRoles)
+    override def getLiveRoles: Set[Role] = Set(this.dst) ++ this.cont.flatMap(_._2.getLiveRoles)
 
-    override def getMids: Set[Mid] = this.cases.flatMap(_._2.getMids).toSet
+    override def getMids: Set[Mid] = this.cont.flatMap(_._2.getMids).toSet
 
     /* ... */
 
@@ -75,7 +76,7 @@ case class GWiggly(
         }
 
     override def toString: String =
-        s"${this.src} ${ConsoleColours.RIGHT_ARROW} ${this.dst} ${casesToString}"
+        s"${this.src} ${ConsoleColours.RIGHT_ARROW} ${this.dst} $this.op ${casesToString}"
 }
 
 
@@ -115,7 +116,7 @@ class GActiveMixed(
     /* ... */
 
     override def toString: String =
-        s"[${this.left} ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.other},${this.obs} ${this.right}]"
+        s"[${this.left} $comL ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.other},${this.obs} $comR ${this.right}]"
 }
 
 

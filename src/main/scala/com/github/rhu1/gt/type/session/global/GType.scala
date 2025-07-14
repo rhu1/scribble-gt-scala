@@ -76,9 +76,21 @@ trait GType extends SType {
 
     /* dynamics */
 
-    // wiggly
-    // active mixed
+    /*def getActions: Set[GAction]
+
+    def step(a: GAction): Either[String, GType]*/
 }
+
+
+sealed trait GAction { }
+case class GSend(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
+    override def toString: String = s"$src!$dst:$op($pay)"
+}
+case class GRecv(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
+    override def toString: String = s"$src?$dst:$op($pay)"  // pq?a -- p is sender
+}
+case class Nu() extends GAction {}
+
 
 object GType {
 
@@ -107,6 +119,7 @@ object GType {
             r,
             { val (xr, yr) = (x.getOrElse(r, Set()), y.getOrElse(r, Set())); xr.union(yr) }
         )).toMap
+
 }
 
 
@@ -214,18 +227,8 @@ case class GInteraction(
 
     /* ... */
 
-    def casesToString: String =
-        def msgToString(x: (Op, Payload)) = s"${x._1}(${x._2})"
-        if (cases.size == 1) {
-            val c = cases.head
-            s"${msgToString(c._1)} . ${c._2}"
-        } else {
-            val tmp = this.cases.map((x, y) => s"${msgToString(x)}: ${y}").mkString(", ")
-            s"{${tmp}}"
-        }
-
     override def toString: String =
-        s"${this.src} ${ConsoleColours.RIGHT_ARROW} ${this.dst} ${casesToString}"
+        s"${this.src} ${ConsoleColours.RIGHT_ARROW} ${this.dst} ${SType.casesToString(this.cases)}"
 }
 
 
@@ -480,8 +483,6 @@ object GEnd extends GType {
 
 
 /* ... */
-
-type Mid = Int
 
 
 private var MIdCounter = 0
