@@ -15,15 +15,16 @@ global protocol RoleCapture(role p, role q, role r) {
 //    }
 
     // equiv
-    a() from p to r;
+    a() from p to r;  // !!! manual unwrapping...
     rec t {
         mixed {
-            b() from q to p;
-            a() from p to r;
+            b() from p to q;
+            x() from q to p;
+            a() from p to r;  // !!! ...manual unwrapping
             continue t;
-        } or q->p {
-            1() from p to q;
-            2() from p to r;
+        } or p->q {
+            1() from q to p;
+            2() from q to r;
         }
     }
 }

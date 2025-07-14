@@ -20,7 +20,9 @@ trait GType extends SType {
 
     protected[global] def unfoldAllOnceAux(done: Set[RecVar]): GType
 
-    def isDiverging(r: Role): Boolean
+    def isDiverging(r: Role): Boolean = isDivergingAux(Set(), r)
+
+    protected[global] def isDivergingAux(env: Set[RecVar], r: Role): Boolean
 
     def getLiveRoles: Set[Role]
 
@@ -32,12 +34,12 @@ trait GType extends SType {
         getMids.map(c => (c, getCommitting(c))).toMap
 
     def getCommitting(c: Mid): Map[Role, Set[Op]] =
-        unfoldAllOnce |> (_.getCommittingAux(c, Set()))
+        unfoldAllOnce |> (_.getCommittingAux(false, c, Set()))
     def getNotCommitting(c: Mid): Map[Role, Set[Op]] =
-        unfoldAllOnce |> (_.getNotCommittingAux(c, Set()))
+        unfoldAllOnce |> (_.getNotCommittingAux(false, c, Set()))
 
-    protected[global] def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]]
-    protected[global] def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]]
+    protected[global] def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
+    protected[global] def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
 
     def isWellFormed: Boolean =
         def checkIsect(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Boolean = {
@@ -47,8 +49,13 @@ trait GType extends SType {
                 ox.intersect(oy).nonEmpty
             })
         }
-        //println(s"WF2222: ${getCommitting(1)} ,, ${getNotCommitting(1)}")
-        !getMids.exists(c => checkIsect(getCommitting(c), getNotCommitting(c)))
+        val cc = getCommitting(1)
+        val nc = getNotCommitting(1)
+        val dbug = !getMids.exists(c => checkIsect(cc, nc))
+        if (!dbug) {
+            println(s"WF1111: ${cc} ,, ${nc}")
+        }
+        dbug
 
     def getSyntacticStrictDeps: Map[Role, Set[Role]]
 
@@ -60,7 +67,7 @@ trait GType extends SType {
 
     def isAware: Boolean = isSingleDecision && isClearTermination
 
-    def isBalanced: Boolean = unfoldAllOnce |> (_.isBalancedAux)
+    def isBalanced: Boolean = unfoldAllOnce |> (_.isBalancedAux)  // !!! unfold currently redundant
 
     protected[global] def isBalancedAux: Boolean
 
@@ -114,7 +121,7 @@ case class GInteraction(
         GInteraction(this.src, this.dst,
             this.cases.map((k, v) => (k, v.unfoldAllOnceAux(done))))
 
-    override def isDiverging(r: Role): Boolean = this.cases.forall(x => x._2.isDiverging(r))
+    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean = this.cases.forall(x => x._2.isDivergingAux(env, r))
 
     override def getLiveRoles: Set[Role] = Set(this.src, this.dst) ++ this.cases.flatMap(_._2.getLiveRoles)
 
@@ -122,28 +129,28 @@ case class GInteraction(
 
     /* ... */
 
-    override def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (!com.contains(this.dst) && com.contains(this.src)) {
-            val tmp = com + this.dst
-            val imm = Map(this.dst -> this.cases.keySet.map((op, _) => op))
-            (Seq(imm) ++ this.cases.values.map(_.getCommittingAux(c, tmp)))
+            val imm = if (!entered) Map() else Map(this.dst -> this.cases.keySet.map((op, _) => op))
+            (Seq(imm) ++ this.cases.values.map(_.getCommittingAux(entered, c, com + this.dst)))
                 .reduce(GType.mergeRoleOps)
         } else {
-            this.cases.map(x => x._2.getCommittingAux(c, com)).reduce(GType.mergeRoleOps)
+            this.cases.map(x => x._2.getCommittingAux(entered, c, com)).reduce(GType.mergeRoleOps)
         }
 
-    override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (!com.contains(this.dst) && com.contains(this.src)) {
             //val imm = Map(this.src -> this.cases.keySet.map((op, _) => op))
             val imm = Map[Role, Set[Op]]()  // !!! ignoring sender ops...
-            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(c, com)))
+            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, com + this.dst)))
                 .reduce(GType.mergeRoleOps)
         } else {
             val tmp = com + this.dst
-            val imm = Map(
+            val imm = if (!entered) Map() else Map(
                 //this.src -> this.cases.keySet.map((op, _) => op),  // !!! ignoring sender ops...
-                this.dst -> this.cases.keySet.map((op, _) => op))
-            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(c, tmp)))
+                this.dst -> this.cases.keySet.map((op, _) => op)
+            )
+            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, tmp)))
                 .reduce(GType.mergeRoleOps)
         }
 
@@ -180,12 +187,16 @@ case class GInteraction(
 
     override def isSingleDecision: Boolean = this.cases.forall(_._2.isSingleDecision)
 
-    override def isClearTermination: Boolean = this.cases.forall(_._2.isClearTermination)
+    override def isClearTermination: Boolean =
+        val dbug = this.cases.forall(_._2.isClearTermination)
+        if (!dbug) println(s"CT2222: ${this}")
+        dbug
 
     override protected[global] def isBalancedAux: Boolean =
         val fst = this.cases.head._2.getLiveRoles -- Set(this.src, this.dst)
         this.cases.slice(1, this.cases.size)
-            .forall(x => (x._2.getLiveRoles -- Set(this.src, this.dst)) == fst)
+                .forall(x => (x._2.getLiveRoles -- Set(this.src, this.dst)) == fst) &&
+            this.cases.values.forall(_.isBalancedAux)
 
     /* ... */
 
@@ -219,7 +230,8 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
         GMixed(id, this.left.unfoldAllOnceAux(done), this.other, this.obs,
             this.right.unfoldAllOnceAux(done))
 
-    override def isDiverging(r: Role): Boolean = this.left.isDiverging(r) && this.right.isDiverging(r)
+    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean =
+        this.left.isDivergingAux(env, r) && this.right.isDivergingAux(env, r)
 
     override def getLiveRoles: Set[Role] = this.left.getLiveRoles ++ this.right.getLiveRoles
 
@@ -227,37 +239,49 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
-    override def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (c == this.id) {
-            val ops_r = this.right.cases.keySet.map((op, _) => op)
-            val imm = Map(
-                this.other -> ops_r,
-                //this.obs -> (this.left.cases.keySet.map((op, _) => op) ++ ops_r)  // !!! ignoring sender ops...
-            )
-            val left = this.left.cases.values.map(_.getCommittingAux(c, com + this.obs))
-            val right = this.right.cases.values.map(_.getCommittingAux(c, com ++ Set(this.obs, this.other)))
-            //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
+            if (entered) {
+                Map()
+            } else {
+                val ops_r = this.right.cases.keySet.map((op, _) => op)
+                val imm = Map(
+                    this.other -> ops_r,
+                    //this.obs -> (this.left.cases.keySet.map((op, _) => op) ++ ops_r)  // !!! ignoring sender ops...
+                )
+                // !!! Reset com
+                val left = this.left.cases.values.map(_.getCommittingAux(true, c, Set(this.obs)))
+                val right = this.right.cases.values.map(_.getCommittingAux(true, c, Set(this.obs, this.other)))
+                //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
 
-            val res = right.foldLeft(left.foldLeft(imm)(GType.mergeRoleOps))(GType.mergeRoleOps)
-            //println(s"WF3333: ${c}: ${res}")
-            res
+                val dbug = right.foldLeft(left.foldLeft(imm)(GType.mergeRoleOps))(GType.mergeRoleOps)
+                //println(s"WF2222: ${c}: ${dbug}")
+                dbug
+            }
         } else {
             //GType.mergeRoleOps(this.left.getCommittingAux(c, com), this.right.getCommittingAux(c, com))
-            val left = this.left.cases.values.map(_.getCommittingAux(c, com))
-            val right = this.right.cases.values.map(_.getCommittingAux(c, com))
+            val left = this.left.cases.values.map(_.getCommittingAux(entered, c, com))
+            val right = this.right.cases.values.map(_.getCommittingAux(entered, c, com))
             right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
         }
 
-    override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (c == this.id) {
-            val left = this.left.cases.values.map(_.getNotCommittingAux(c, com + this.obs))
-            val right = this.right.cases.values.map(_.getNotCommittingAux(c, com ++ Set(this.obs, this.other)))
-            //GType.mergeRoleOps(left, right)
-            right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
+            if (entered) {  // !!!
+                Map()
+            } else {
+                // !!! reset com
+                val left = this.left.cases.values.map(_.getNotCommittingAux(true, c, Set(this.obs)))
+                val right = this.right.cases.values.map(_.getNotCommittingAux(true, c, Set(this.obs, this.other)))
+                //GType.mergeRoleOps(left, right)
+                val dbug = right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
+                //println(s"WF3333: ${c}: ${dbug} ,, ${this}")
+                dbug
+            }
         } else {
             //GType.mergeRoleOps(this.left.getNotCommittingAux(c, com), this.right.getNotCommittingAux(c, com))
-            val left = this.left.cases.values.map(_.getNotCommittingAux(c, com))
-            val right = this.right.cases.values.map(_.getNotCommittingAux(c, com))
+            val left = this.left.cases.values.map(_.getNotCommittingAux(entered, c, com))
+            val right = this.right.cases.values.map(_.getNotCommittingAux(entered, c, com))
             right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
         }
 
@@ -276,12 +300,17 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
     override def isClearTermination: Boolean =
         val R = getLiveRoles - this.obs
         val dr = this.left.getSyntacticEventualDeps - this.obs
-        R.subsetOf(dr.keySet) &&
+        val dbug = R.subsetOf(dr.keySet) &&
             dr.forall((r, ds) => this.left.isDiverging(r) || ds.contains(obs)) &&
-                this.left.isClearTermination && this.right.isClearTermination
+            this.left.isClearTermination && this.right.isClearTermination
+        if (!dbug) {
+            println(s"CT1111: R=${R} ,, dr=${dr} ,, LHS=${dr.forall((r, ds) => this.left.isDiverging(r) || ds.contains(obs))} ,, left=${this.left.isClearTermination} ,, right=${this.right.isClearTermination}")
+        }
+        dbug
 
     override protected[global] def isBalancedAux: Boolean =
-        this.left.getLiveRoles == this.right.getLiveRoles
+        this.left.getLiveRoles == this.right.getLiveRoles &&
+            this.left.isBalancedAux && this.right.isBalancedAux
 
     /* ... */
 
@@ -312,10 +341,10 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     override def unfoldAllImmediate: GType = unfold |> (_.unfold) // Assumes contractive...
 
-    override def isDiverging(r: Role): Boolean =
+    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean =
         val R = getLiveRoles
         if (R.contains(r)) {  // !!! Assumes projection
-            this.body.isDiverging(r)
+            this.body.isDivergingAux(env + this.rvar, r)
         } else {
             false
         }
@@ -326,11 +355,11 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     /* ... */
 
-    override def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
-        this.body.getCommittingAux(c, com)
+    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+        this.body.getCommittingAux(entered, c, com)
 
-    override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
-        this.body.getNotCommittingAux(c, com)
+    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+        this.body.getNotCommittingAux(entered: Boolean, c, com)
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = this.body.getSyntacticStrictDeps
 
@@ -338,9 +367,12 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     override def isSingleDecision: Boolean = this.body.isSingleDecision
 
-    override def isClearTermination: Boolean = this.body.isClearTermination
+    override def isClearTermination: Boolean =
+        val dbug = this.body.isClearTermination
+        if (!dbug) println(s"CT3333: ${this}")
+        dbug
 
-    override protected[global] def isBalancedAux: Boolean = this.body.isBalanced
+    override protected[global] def isBalancedAux: Boolean = this.body.isBalancedAux
 
 
     /* ... */
@@ -361,7 +393,7 @@ case class GRecVar(rvar: RecVar) extends GType {
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
 
-    override def isDiverging(r: Role): Boolean = true  // Assumes pruning by GRec case
+    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean = env.contains(this.rvar)  // Assumes pruning by GRec case
 
     override def getLiveRoles: Set[Role] = Set()
 
@@ -369,9 +401,9 @@ case class GRecVar(rvar: RecVar) extends GType {
 
     /* ... */
 
-    override def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
+    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
 
-    override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
+    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = Map()
 
@@ -401,7 +433,7 @@ object GEnd extends GType {
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
 
-    override def isDiverging(r: Role): Boolean = false
+    override def isDivergingAux(env: Set[RecVar], r: Role): Boolean = false
 
     override def getLiveRoles: Set[Role] = Set()
 
@@ -409,9 +441,9 @@ object GEnd extends GType {
 
     /* ... */
 
-    override def getCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
+    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
 
-    override def getNotCommittingAux(c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
+    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = Map()
 
