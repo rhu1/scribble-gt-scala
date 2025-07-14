@@ -266,7 +266,8 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 val right = this.right.cases.values.map(_.getCommittingAux(true, c, Set(this.obs, this.other)))
                 //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
 
-                val dbug = right.foldLeft(left.foldLeft(imm)(GType.mergeRoleOps))(GType.mergeRoleOps)
+                val dbug = left.foldLeft(imm)(GType.mergeRoleOps)
+                            |> (a => right.foldLeft(a)(GType.mergeRoleOps))
                 //println(s"WF2222: ${c}: ${dbug}")
                 dbug
             }
