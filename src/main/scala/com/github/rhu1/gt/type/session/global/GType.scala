@@ -172,10 +172,11 @@ case class GInteraction(
 
     // !!! in-built transitivity (like strict), unlike formal eventual...
     override def getSyntacticEventualDeps: Map[Role, Set[Role]] =
-        var nested = this.cases.values.map(_.getSyntacticStrictDeps).reduce(GType.isectDeps)
+        var nested = this.cases.values.map(_.getSyntacticEventualDeps).reduce(GType.isectDeps)
         // ...same as strict except don't remove this.src << this.dst
         def shouldUp(r: Role): Boolean = !nested.getOrElse(r, Set()).contains(this.src)
         var up = if (shouldUp(this.dst)) Set(this.dst) else Set()  // Pre: need to updated nested
+        println(s"ED1111: ${nested} ,, $up ,, $this")
         while (up.nonEmpty) {  // fix
             up.foreach(r => {
                 up = up - r
@@ -183,6 +184,7 @@ case class GInteraction(
                 nested = nested + (r -> (curr + this.src))
                 up = up ++ nested.filter((r1, ds) => ds.contains(r) && shouldUp(r1)).keys
             })
+            println(s"ED2222: ${nested} ,, $up")
         }
         nested
 
@@ -305,7 +307,8 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
             dr.forall((r, ds) => this.left.isDiverging(r) || ds.contains(obs)) &&
             this.left.isClearTermination && this.right.isClearTermination
         if (!dbug) {
-            println(s"CT1111: R=${R} ,, dr=${dr} ,, LHS=${dr.forall((r, ds) => this.left.isDiverging(r) || ds.contains(obs))} ,, left=${this.left.isClearTermination} ,, right=${this.right.isClearTermination}")
+            println(s"CT1111: R=${R} ,, dr=${dr} ,, LHS=${dr.forall((r, ds) => this.left.isDiverging(r) || ds.contains(obs))} " +
+                s",, left=${this.left.isClearTermination} ,, right=${this.right.isClearTermination}")
         }
         dbug
 
