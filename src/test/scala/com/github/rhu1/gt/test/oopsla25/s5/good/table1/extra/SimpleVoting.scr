@@ -1,0 +1,15 @@
+// https://github.com/LauraVoinea/scribble-java/blob/gt-artifact/scribble-gt-demos/classics/Timeout.scr
+
+module Timeout;
+
+global protocol Timeout(role A, role B, role C) {
+  mixed {
+    a1() from A to B;
+    a2() from B to C;
+    a5() from B to A;
+    a6() from A to C;
+  } or A -> B {
+    To() from B to A;
+    To() from B to C;
+  }
+}
