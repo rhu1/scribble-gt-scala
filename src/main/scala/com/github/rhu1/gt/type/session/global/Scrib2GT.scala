@@ -33,14 +33,17 @@ object Scrib2GT {
         case _ => throw new RuntimeException(s"TODO: $p")
     }
 
-    def translateGMixed(x: GTGMixed): GMixed = GMixed(
-        nextMid,
-        translateSeq(x.getLeftBlockChild.getInteractSeqChild)
-            .unfoldAllImmediate.asInstanceOf[GInteraction],
-        translateRoleNode(x.getOtherChild),
-        translateRoleNode(x.getObserverChild),
-        translateSeq(x.getRightBlockChild.getInteractSeqChild)
-            .unfoldAllImmediate.asInstanceOf[GInteraction])
+    def translateGMixed(x: GTGMixed): GMixed =
+        val left = translateSeq(x.getLeftBlockChild.getInteractSeqChild)
+            .unfoldAllImmediate.asInstanceOf[GInteraction]
+        val right = translateSeq(x.getRightBlockChild.getInteractSeqChild)
+            .unfoldAllImmediate.asInstanceOf[GInteraction]
+        if (left.src != right.dst || left.dst != right.src) {
+            throw new RuntimeException(s"Inconsistent mixed roles: \n\tleft =$left\n\tright=$right")
+        }
+        val oth = translateRoleNode(x.getOtherChild)
+        val obs = translateRoleNode(x.getObserverChild)
+        GMixed(nextMid, left, oth, obs, right)
 
     def translateGChoice(x: GChoice): GInteraction =
         val src = translateRoleNode(x.getSubjectChild)
