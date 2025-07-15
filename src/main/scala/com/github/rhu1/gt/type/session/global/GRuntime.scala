@@ -68,7 +68,50 @@ case class GWiggly(
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] = throw new RuntimeException("TODO")
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+        for {
+            (cases, sigmas) <- this.cases.foldLeft
+                                   (Option((ListMap.empty[(Op, Payload), LType], ListMap.empty[Op, Sigma]))) {
+                                       case (None, _) => None
+                                       case (Some(acc), (k, g)) =>
+                                           g.rprojectAux(pi, r).map(y => (acc._1 + ((k, y._1)), acc._2 + ((k._1 -> y._2))))
+                                   }
+            head <- this.cont.headOption
+            res <-
+                if (r == this.src) {
+                    val filt = sigmas.filter((k, _) => k != this.op).values.toSet
+                    if (filt.size != 1 || filt.head.nonEmpty) {  // !!! cf. no check
+                        None
+                    } else {
+                        Some((cases(head._1), sigmas(this.op)))
+                    }
+                } else if (r == this.dst) {
+                    val filt = sigmas.filter((k, _) => k != this.op).values.toSet
+                    if (filt.size != 1 || filt.head.nonEmpty) {  // !!! cf. just pairwise equal
+                        None
+                    } else {
+                        val s: Sigma = sigmas(this.op)
+                        if (s.contains(this.src)) {
+                            val s1: Sigma = s +
+                                (this.src -> (Msg(this.op, pi) :: s(this.src)))  // Empty already checked
+                            Some((LBranch(this.src, cases), s1))
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    for {
+                        cc <- cases.values.tail.foldLeft(Option(cases.values.head)) {  // cases non-empty
+                            case (None, _) => None
+                            case (Some(acc), x) => LType.merge(acc, x)
+                        }
+                        ss <- sigmas.values.tail.foldLeft(Option(sigmas.values.head)) {
+                            case (None, _) => None
+                            case (Some(acc), x) => LType.mergeSigma(acc, x)  // !!! cf. defs
+                        }
+                    } yield (cc, ss)
+                }
+        } yield res
 
     /* ... */
 
@@ -151,9 +194,26 @@ class GActiveMixed(
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] = throw new RuntimeException("TODO")
+    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+        if (this.comL contains r) {
+            this.left.rprojectAux(pi :+ pL, r) map {
+                case (p, s) => (LActiveLeft(this.id, p), s)
+            }
+        } else if (this.comR contains r) {
+            this.right.rprojectAux(pi :+ pR, r) map {
+                case (p, s) => (LActiveRight(this.id, p), s)
+            }
+        } else {
+            for {
+               left <- this.left.rprojectAux(pi :+ pL, r)
+               right <- this.right.rprojectAux(pi :+ pR, r)
+               circ <- left._2.circ(right._2)
+            } yield (
+                LActiveMixed(this.id, left._1, this.obs, right._1), circ)
+        }
 
-    /* ... */
+
+        /* ... */
 
     override def getActions: Set[GAction] =
         val left = this.left.getActions.filter({
@@ -237,3 +297,7 @@ case class GRecv(src: Role, dst: Role, op: Op, pay: Payload) extends GIO {
 }
 // !!! c
 case class GNu(c: Mid) extends GAction {}
+
+
+/* ... */
+

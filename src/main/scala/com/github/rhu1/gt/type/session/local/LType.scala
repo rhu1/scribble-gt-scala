@@ -60,9 +60,22 @@ case class Msg(op: Op, pi: Path) {}
 type Sigma = Map[Role, List[Msg]]
 val EMPTY_SIGMA = Map.empty[Role, List[Msg]]
 
+implicit class SigmaOps[A <: Sigma](a: A) {
+    def circ(b: A): Option[A] =
+        if (a.keySet != b.keySet) {
+            None
+        } else {
+            var aa = a
+            a.ap
+            aa.toSeq
+            a.keySet.foreach(r => aa = (aa + (r -> (a.get(r).get ++ b.get(r).get))))
+            //Some(a.keySet.map(r => a.get(r).get ++ b.get(r).get))
+        }
+}
+
 sealed trait pLR {}
-case class pL() extends pLR {}
-case class pR() extends pLR {}
+object pL extends pLR {}
+object pR extends pLR {}
 
 type Path = List[pLR]
 val EPSILON: Path = List[pLR]()
@@ -132,34 +145,35 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
         s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id}_${this.obs} ${this.right}]"
 }
 
-case class LActiveLeft(id: Mid, left: LType, obs: Role) extends LType {
+// !!! no obs -- ...also LActiveMixed ?
+case class LActiveLeft(id: Mid, left: LType) extends LType {
 
     /* ... */
 
     def subs(x: Map[RecVar, LType]): LActiveLeft =
-        LActiveLeft(this.id, this.left.subs(x), obs)
+        LActiveLeft(this.id, this.left.subs(x))
 
     /* ... */
 
     /* ... */
 
     override def toString: String =
-        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id}_${this.obs} ${ConsoleColours.BULLET}]"
+        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id} ${ConsoleColours.BULLET}]"
 }
 
-case class LActiveRight(id: Mid, obs: Role, right: LType) extends LType {
+case class LActiveRight(id: Mid, right: LType) extends LType {
 
     /* ... */
 
     def subs(x: Map[RecVar, LType]): LActiveRight =
-        LActiveRight(this.id, obs, this.right.subs(x))
+        LActiveRight(this.id, this.right.subs(x))
 
     /* ... */
 
     /* ... */
 
     override def toString: String =
-        s"[${ConsoleColours.BULLET} ${ConsoleColours.BLACK_TRIANGLE}${id}_${this.obs} ${this.right}]"
+        s"[${ConsoleColours.BULLET} ${ConsoleColours.BLACK_TRIANGLE}${id} ${this.right}]"
 }
 
 case class LRec(rvar: RecVar, body: LType) extends LType {
