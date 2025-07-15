@@ -86,9 +86,26 @@ trait GType extends SType {
 
     /* dynamics */
 
-    /*def getActions: Set[GAction]
+    def getActions: Set[GAction]
 
-    def step(a: GAction): Either[String, GType]*/
+    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType]
+
+    def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
+        val com = getCommitting()
+        /*val s = com.toSeq.flatMap((c, rops) => rops.toSeq.map((r, ops) => (r, (c, ops))))
+        s.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
+            case (acc, (r, (c, ops))) =>
+                acc + (r -> (acc.getOrElse(r, Map.empty[Mid, Set[Op]]) + (c -> ops)))  // c's disjoint per r*/
+        com.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
+            case (acc, (c, rops)) =>
+                (acc.keySet union rops.keySet).map(r => (
+                    r,
+                    { val gacc = acc.getOrElse(r, Map.empty[Mid, Set[Op]])
+                      val gcom = rops.getOrElse(r, Set.empty[Op])
+                      //gacc + (c -> (gacc.getOrElse(c, Set.empty[Op]) ++ gcom)) }  // getOrElse always empty for c
+                      gacc + (c -> gcom) }
+                )).toMap
+        }
 }
 
 
@@ -254,6 +271,43 @@ case class GInteraction(
 
     /* ... */
 
+    def getActions: Set[GAction] =
+        val pq = Set(this.src, this.dst)
+        this.cases.keySet.map((o, d) => GSend(this.src, this.dst, o, d)) union
+            this.cases.values
+                .map(_.getActions filter {
+                    case x: GIO => !pq.contains(x.src) && !pq.contains(x.dst)
+                    case _ => false
+                })
+                .reduce((x, y) => x intersect y)
+
+    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = a match {
+        case GSend(src, dst, op, pay) =>
+            if (src == this.src || dst == this.dst) {
+                if (src != this.src || dst != this.dst) {
+                    Left(s"Cannot step $a in: $this")
+                } else {
+                    this.cases.find((k, v) => k == (op, pay)) match {
+                        case None => Left(s"Cannot step $a in: $this")
+                        case Some(x) => Right(x._2)
+                    }
+                }
+            } else {
+                stepNested(com, a)
+            }
+        case _ => stepNested(com, a)
+    }
+
+    protected def stepNested(com: Map[Mid, Set[Op]], a: GAction): Either[String, GInteraction] = for {
+        q <- this.cases.foldLeft[Either[String, ListMap[(Op, Payload), GType]]]
+                 (Right(ListMap.empty[(Op, Payload), GType])) {
+                     case (acc, (m, p)) => acc match
+                         case Right(x) => p.step(com, a).map(y => x + ((m, y)))
+                         case Left(x) => Left(x)
+                 }
+    } yield GInteraction(this.src, this.dst, q)
+
+
     /* ... */
 
     override def toString: String =
@@ -361,8 +415,6 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
-    /* ... */
-
     override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
             left <- this.left.rprojectAux(pi, r)
@@ -374,6 +426,20 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 case _ => None
             }
         } yield (LMixed(this.id, left._1, obs, right._1), s0)
+
+    /* ... */
+
+    def getActions: Set[GAction] = Set(GNu(this.id))
+
+    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GActiveMixed] = a match {
+        case GNu(c) =>
+            if (c == this.id) {
+                Right(GActiveMixed(this.id, this.left, this.other, this.obs, Set(), Set(), this.right))
+            } else{
+                Left(s"Cannot step $a in: $this")
+            }
+        case _ => Left(s"Cannot step $a in: $this")
+    }
 
     /* ... */
 
@@ -435,7 +501,6 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     override protected[global] def isBalancedAux: Boolean = this.body.isBalancedAux
 
-
     /* ... */
 
     override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
@@ -450,7 +515,12 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
         } yield (b1, s1)
 
     /* ... */
-    
+
+    def getActions: Set[GAction] = unfold |> (_.getActions)
+
+    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = 
+        unfold |> (_.step(com, a))
+
     /* ... */
 
     override def toString: String = s"rec ${this.rvar} . ${this.body}"
@@ -496,7 +566,11 @@ case class GRecVar(rvar: RecVar) extends GType {
         Some((LRecVar(this.rvar), EMPTY_SIGMA))
         
     /* ... */
-    
+
+    def getActions: Set[GAction] = Set()
+
+    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = Left("Stuck: $this")
+
     /* ... */
 
     override def toString: String = rvar.toString
@@ -541,7 +615,11 @@ object GEnd extends GType {
         Some((LEnd, EMPTY_SIGMA))
         
     /* ... */
-    
+
+    def getActions: Set[GAction] = Set()
+
+    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = Left("Stuck: $this")
+
     /* ... */
 
     override def toString: String = "end"
@@ -558,13 +636,3 @@ def nextMid =
     MIdCounter
 
 
-/* ... */
-
-sealed trait GAction { }
-case class GSend(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
-    override def toString: String = s"$src!$dst:$op($pay)"
-}
-case class GRecv(src: Role, dst: Role, op: Op, pay: Payload) extends GAction {
-    override def toString: String = s"$src?$dst:$op($pay)"  // pq?a -- p is sender
-}
-case class Nu() extends GAction {}
