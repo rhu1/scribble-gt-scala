@@ -33,7 +33,12 @@ object LType {
             Some(x)
         } else {
             (x, y) match {
-                case (LBranch(src1, cases1), LBranch(src2, cases2)) => None
+                case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
+                    if (src1 == src2 && cases1.keySet.intersect(cases2.keySet).isEmpty) {
+                        Some(LBranch(src1, cases1 ++ cases2))
+                    } else {
+                        None
+                    }
                 case (LRec(rvar1, body1), LRec(rvar2, body2)) =>
                     if (rvar1 == rvar2) {
                         merge(body1, body2).map(z => LRec(rvar1, z))

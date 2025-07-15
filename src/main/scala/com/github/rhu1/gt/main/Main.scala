@@ -36,7 +36,7 @@ object Main {
             val valid = p.isValid
             println(s"$n: ${if (valid) "OK" else "FAIL"}")
             if (!valid) {
-                println(s"WF=${p.isWellFormed}")
+                println(s"\nWF=${p.isWellFormed}")
                 println(s"SD=${p.isSingleDecision}")
                 println(s"CT=${p.isClearTermination}")
                 println(s"BA=${p.isBalanced}")
@@ -44,6 +44,14 @@ object Main {
             }
         })
 
+        println("\n[GT] Projecting:\n")
+        translated.foreach((n, p) => {
+            p.getLiveRoles.foreach(r => {p.project(r) match {
+                    case Some(x) => println(s"$n@$r: ${x}")
+                    case None => throw new RuntimeException(s"Projection failed: $n@$r")
+                }
+            })
+        })
     }
 
     def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
