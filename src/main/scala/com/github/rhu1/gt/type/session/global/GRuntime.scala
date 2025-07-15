@@ -1,10 +1,6 @@
 package com.github.rhu1.gt.`type`.session.global
 
 import com.github.rhu1.gt.`type`.session.*
-import com.github.rhu1.gt.`type`.session.local.*
-import com.github.rhu1.gt.util.ConsoleColours
-
-import scala.collection.immutable.ListMap
 
 
 /* ... */
@@ -30,5 +26,4 @@ case class GRecv(src: Role, dst: Role, op: Op, pay: Payload) extends GIO {
 case class GNu(c: Mid) extends GAction {}
 
 
-/* ... */
 

@@ -70,13 +70,15 @@ case class GWiggly(
 
     override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
-            (cases, sigmas) <- this.cases.foldLeft
-                                   (Option((ListMap.empty[(Op, Payload), LType], ListMap.empty[Op, Sigma]))) {
-                                       case (None, _) => None
-                                       case (Some(acc), (k, g)) =>
-                                           g.rprojectAux(pi, r).map(y => (acc._1 + ((k, y._1)), acc._2 + ((k._1 -> y._2))))
-                                   }
-            head <- this.cont.headOption
+            (cases, sigmas) <-
+                this.cases.foldLeft
+                   (Option((ListMap.empty[(Op, Payload), LType], ListMap.empty[Op, Sigma]))) {
+                       case (None, _) => None
+                       case (Some(acc), (k, g)) =>
+                           g.rprojectAux(pi, r)
+                            .map(y => (acc._1 + ((k, y._1)), acc._2 + ((k._1 -> y._2))))
+                   }
+            head <- this.cont.headOption  // head._1._1 == this.op
             res <-
                 if (r == this.src) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
@@ -93,7 +95,7 @@ case class GWiggly(
                         val s: Sigma = sigmas(this.op)
                         if (s.contains(this.src)) {
                             val s1: Sigma = s +
-                                (this.src -> (Msg(this.op, pi) :: s(this.src)))  // Empty already checked
+                                (this.src -> (Msg(this.op, head._1._2, pi) :: s(this.src)))  // Empty already guarded
                             Some((LBranch(this.src, cases), s1))
                         } else {
                             None
