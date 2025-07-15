@@ -271,7 +271,7 @@ case class GInteraction(
 
     /* ... */
 
-    def getActions: Set[GAction] =
+    override def getActions: Set[GAction] =
         val pq = Set(this.src, this.dst)
         this.cases.keySet.map((o, d) => GSend(this.src, this.dst, o, d)) union
             this.cases.values
@@ -281,7 +281,7 @@ case class GInteraction(
                 })
                 .reduce((x, y) => x intersect y)
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = a match {
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = a match {
         case GSend(src, dst, op, pay) =>
             if (src == this.src || dst == this.dst) {
                 if (src != this.src || dst != this.dst) {
@@ -429,9 +429,9 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
-    def getActions: Set[GAction] = Set(GNu(this.id))
+    override def getActions: Set[GAction] = Set(GNu(this.id))
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GActiveMixed] = a match {
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GActiveMixed] = a match {
         case GNu(c) =>
             if (c == this.id) {
                 Right(GActiveMixed(this.id, this.left, this.other, this.obs, Set(), Set(), this.right))
@@ -516,9 +516,10 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     /* ... */
 
-    def getActions: Set[GAction] = unfold |> (_.getActions)
+    override def getActions: Set[GAction] =
+        unfold |> (_.getActions)
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = 
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] =
         unfold |> (_.step(com, a))
 
     /* ... */
@@ -567,9 +568,10 @@ case class GRecVar(rvar: RecVar) extends GType {
         
     /* ... */
 
-    def getActions: Set[GAction] = Set()
+    override def getActions: Set[GAction] = Set()
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = Left("Stuck: $this")
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] =
+        Left("Stuck: $this")
 
     /* ... */
 
@@ -616,9 +618,9 @@ object GEnd extends GType {
         
     /* ... */
 
-    def getActions: Set[GAction] = Set()
+    override def getActions: Set[GAction] = Set()
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = Left("Stuck: $this")
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = Left("Stuck: $this")
 
     /* ... */
 

@@ -72,7 +72,7 @@ case class GWiggly(
 
     /* ... */
 
-    def getActions: Set[GAction] =
+    override def getActions: Set[GAction] =
         val cont = this.cont.head
         Set(GRecv(this.src, this.dst, this.op, cont._1._2)) union
             cont._2.getActions.filter {
@@ -80,7 +80,7 @@ case class GWiggly(
                 case _ => false
             }
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = a match {
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = a match {
         case GRecv(src, dst, op, pay) =>
             if (dst == this.dst) {
                 if (src != this.src || dst != this.dst || op != this.op) {
@@ -155,7 +155,7 @@ class GActiveMixed(
 
     /* ... */
 
-    def getActions: Set[GAction] =
+    override def getActions: Set[GAction] =
         val left = this.left.getActions.filter({
             case GSend(src, _, _, _) => !comR.contains(src)
             case GRecv(src, dst, op, pay) => !comR.contains(dst)
@@ -168,7 +168,7 @@ class GActiveMixed(
         })
         left union right
 
-    def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GActiveMixed] =
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GActiveMixed] =
         val R = getLiveRoles
         val left = this.left.step(com, a)
         val right = this.right.step(com, a)
