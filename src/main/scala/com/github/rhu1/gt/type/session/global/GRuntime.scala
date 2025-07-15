@@ -207,9 +207,9 @@ class GActiveMixed(
             for {
                left <- this.left.rprojectAux(pi :+ pL, r)
                right <- this.right.rprojectAux(pi :+ pR, r)
-               circ <- left._2.circ(right._2)
+               s <- left._2 circ right._2
             } yield (
-                LActiveMixed(this.id, left._1, this.obs, right._1), circ)
+                LActiveMixed(this.id, left._1, this.obs, right._1), s)
         }
 
 

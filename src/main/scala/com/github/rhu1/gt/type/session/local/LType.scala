@@ -61,15 +61,13 @@ type Sigma = Map[Role, List[Msg]]
 val EMPTY_SIGMA = Map.empty[Role, List[Msg]]
 
 implicit class SigmaOps[A <: Sigma](a: A) {
-    def circ(b: A): Option[A] =
+    def circ(b: A): Option[Sigma] =
         if (a.keySet != b.keySet) {
             None
         } else {
             var aa = a
-            a.ap
             aa.toSeq
-            a.keySet.foreach(r => aa = (aa + (r -> (a.get(r).get ++ b.get(r).get))))
-            //Some(a.keySet.map(r => a.get(r).get ++ b.get(r).get))
+            Some(a.map((r, ms) => (r, ms ++ b(r))))
         }
 }
 
