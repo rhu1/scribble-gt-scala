@@ -130,14 +130,14 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
         )
 }
 
-case class System(ps: Map[Role, Participant]) {
+case class LSystem(ps: Map[Role, Participant]) {
 
     // Post: Set[YAction] nonEmpty
     def getActions: Map[Role, Set[YAction]] =
         this.ps.map((r, p) => (r, p.getActions))
                .filter((r, as) => as.nonEmpty)
 
-    def step(a: YAction): Either[String, System] = a match {
+    def step(a: YAction): Either[String, LSystem] = a match {
         case LSend(src, dst, op, pay) =>
             val err = s"Cannot step $a in: $this"
             for {
@@ -147,17 +147,17 @@ case class System(ps: Map[Role, Participant]) {
                 (pi, ps1) = pp
                 qs <- pd.q.get(src).map(_.appended(Msg(op, pay, pi))).toRight(err)
                 pd1 = Participant(dst, pd.com, pd.L, pd.q + (src -> qs))
-            } yield System(this.ps + (src -> ps1) + (dst -> pd1))
+            } yield LSystem(this.ps + (src -> ps1) + (dst -> pd1))
         case _ =>  // Other LActions and LRho
             for {
                 p <- this.ps.get(a.subj).toRight(s"Cannot step $a in: $this")
                 p1 <- p.step(a)
-            } yield System(this.ps + (a.subj -> p1._2))
+            } yield LSystem(this.ps + (a.subj -> p1._2))
     }
 }
 
-object System {
-    def run(s: System): Unit = {
+object LSystem {
+    def run(s: LSystem): Unit = {
         var i = 0
         var s1 = s
         var ras = s1.getActions  // as nonEmpty

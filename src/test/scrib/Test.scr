@@ -8,6 +8,19 @@ global protocol Proto1(role A, role B) {
 }
 //*/
 
+/*
+global protocol Proto1(role A, role B, role C) {
+    choice at A {
+        1() from A to B;
+        2() from B to C;
+    } or {
+        3() from A to B;
+        4() from B to C;  // Testing projection (merge)
+        //4() from C to B;  // Bad
+    }
+}
+//*/
+
 //*
 global protocol Proto1(role A, role B) {
     mixed {

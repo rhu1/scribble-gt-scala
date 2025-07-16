@@ -1,7 +1,9 @@
 package com.github.rhu1.gt.main
 
 import com.github.rhu1.gt.*
+import com.github.rhu1.gt.`type`.session.*
 import com.github.rhu1.gt.`type`.session.global.{GType, Scrib2GT}
+import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
@@ -45,15 +47,27 @@ object Main {
         })
 
         println("\n[GT] Projecting:\n")
+        val projected = translated.map((n, G) => (
+            n,
+            G.getLiveRoles.map(r => r -> G.project(r).getOrElse(
+                    throw new RuntimeException(s"Couldn't project to $r: $G"))
+            ).toMap
+        ))
+        projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
 
-        translated.foreach((n, p) => {
-            p.getLiveRoles.foreach(r => {p.project(r) match {
-                    case Some(x) => println(s"$n@$r: ${x}")
-                    case None => throw new RuntimeException(s"Projection failed: $n@$r")
-                }
-            })
-        })
+        println("\n[GT] Executing:\n")
+        for ((n, rL) <- projected) {
+            val Y = toSystem(translated(n), projected(n))
+            println(Y)
+        }
     }
+
+    private def toSystem(G: GType, rL: Map[Role, LType]): LSystem =
+        val c = G.getCommitting()
+        val com = G.getRoleCommitting
+        println(s"com: $c\nrcom: $com")
+        val ps = rL.map((r, L) => r -> Participant(r, com(r), L, EMPTY_SIGMA))
+        LSystem(ps)
 
     def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
         parsed.values.flatMap(m => m.getGProtoDeclChildren.asScala.map(p => (

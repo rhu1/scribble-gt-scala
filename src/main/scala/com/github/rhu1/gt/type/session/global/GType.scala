@@ -31,32 +31,36 @@ trait GType extends SType {
 
     /* static */
 
+    // Post: Role keySet == getMids HERE HERE TODO
     def getCommitting(): Map[Mid, Map[Role, Set[Op]]] =  // ...removing parens causing "overload ambiguity" ?
         getMids.map(c => (c, getCommitting(c))).toMap
 
+    // Only includes Role with nonEmpty Set
     def getCommitting(c: Mid): Map[Role, Set[Op]] =
         unfoldAllOnce |> (_.getCommittingAux(false, c, Set()))
-    def getNotCommitting(c: Mid): Map[Role, Set[Op]] =
+    protected[global]def getNotCommitting(c: Mid): Map[Role, Set[Op]] =
         unfoldAllOnce |> (_.getNotCommittingAux(false, c, Set()))
 
     protected[global] def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
     protected[global] def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
 
     def isWellFormed: Boolean =
-        def checkIsect(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Boolean = {
+        def checkForIsect(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Boolean = {
             (x.keySet ++ y.keySet).exists(r => {
                 val ox = x.getOrElse(r, Set())
                 val oy = y.getOrElse(r, Set())
-                ox.intersect(oy).nonEmpty
+                val dbug = (ox intersect oy).nonEmpty
+                if (dbug) {
+                    println(s"WFqqqq: $r ${ox intersect oy}")
+                }
+                dbug
             })
         }
-        val cc = getCommitting(1)
-        val nc = getNotCommitting(1)
-        val dbug = !getMids.exists(c => checkIsect(cc, nc))
-        if (!dbug) {
-            println(s"WF1111: ${cc} ,, ${nc}")
+        val isect = getMids.filter(c => checkForIsect(getCommitting(c), getNotCommitting(c)))
+        if (isect.nonEmpty) {
+            isect.foreach(x => println(s"WF1111: $x\n${getCommitting(x)}\n${getNotCommitting(x)}"))
         }
-        dbug
+        isect.isEmpty
 
     def getSyntacticStrictDeps: Map[Role, Set[Role]]
 
@@ -346,15 +350,16 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 val imm = Map(
                     this.other -> ops_r,
                     //this.obs -> (this.left.cases.keySet.map((op, _) => op) ++ ops_r)  // !!! ignoring sender ops...
+                    this.obs -> this.left.cases.keySet.map((op, _) => op)
                 )
                 // !!! Reset com
                 val left = this.left.cases.values.map(_.getCommittingAux(true, c, Set(this.obs)))
                 val right = this.right.cases.values.map(_.getCommittingAux(true, c, Set(this.obs, this.other)))
                 //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
 
-                val dbug = left.foldLeft(imm)(GType.mergeRoleOps)
-                            |> (a => right.foldLeft(a)(GType.mergeRoleOps))
-                //println(s"WF2222: ${c}: ${dbug}")
+                val dbugl = left.foldLeft(imm)(GType.mergeRoleOps)
+                val dbug = dbugl |> (a => right.foldLeft(a)(GType.mergeRoleOps))
+                println(s"WF2222: ${c}: ${imm} ,, ${left} ,, ${dbugl} ,, ${dbug}")
                 dbug
             }
         } else {
