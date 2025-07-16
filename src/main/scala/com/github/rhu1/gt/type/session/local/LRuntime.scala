@@ -125,7 +125,6 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 
     def gc(a: LRho): Either[String, Participant] =
         Either.cond(a.subj != this.r,
-            //throw new RuntimeException("TODO"),  // FIXME
             Participant(this.r, this.com, L, this.q.gc(this.L)),
             s"Cannot step $a in: $this"
         )
