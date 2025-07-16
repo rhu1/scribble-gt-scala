@@ -1,7 +1,7 @@
 package com.github.rhu1.gt.`type`.session.local
 
 import com.github.rhu1.gt.`type`.session.*
-import com.github.rhu1.gt.util.ConsoleColours
+import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 
 import scala.collection.immutable.ListMap
 
@@ -19,7 +19,8 @@ trait LType extends SType {
     def getActions(subj: Role): Set[LAction]
 
     // Sigma is local (in) queue -- send queue managed by System.step
-    def step(pi: Path, a: LAction, q: Sigma): Either[String, (Path, LType, Sigma)]
+    def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)]
 }
 
 object LType {
@@ -60,10 +61,19 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = this.cases.keySet.map(
-        (o, d) => LSend(subj, this.dst, o, d))
+    override def getActions(subj: Role): Set[LAction] =
+        this.cases.keySet.map((o, d) => LSend(subj, this.dst, o, d))
 
-    override def step(a: LAction, q: Sigma): Either[String, (LType, Sigma)]
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] =
+        val err = s"Cannot step $a in: ($pi, $this, $q)"
+        a match {
+            case LSend(src, dst, op, pay) if src == a.subj && dst == this.dst =>
+                for {
+                    cont <- this.cases.get((op, pay)).toRight(err)
+                } yield (pi, cont, q)
+            case _ => Left(err)
+        }
 
     /* ... */
 
@@ -79,6 +89,26 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
         LBranch(this.src, this.cases.map((k, v) => (k, v.subs(x))))
 
     /* ... */
+
+    override def getActions(subj: Role): Set[LAction] =
+        this.cases.keySet.map((o, d) => LRecv(subj, this.src, o, d))
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] =
+        val err = s"Cannot step $a in: ($pi, $this, $q)"
+        a match {
+            case LRecv(src, dst, op, pay) if dst == a.subj && src == this.src =>
+                for {
+                    cont <- this.cases.get((op, pay)).toRight(err)
+                    qs <- q.get(this.src).toRight(err)
+                    qs1 <- {
+                        def f(x: Msg): Boolean = x.op == op && x.pay == pay && x.pi == pi
+                        val i = qs.indexWhere(f)
+                        if (i == -1) Left(err) else Right(qs.take(i) ++ qs.drop(i+1))
+                    }
+                } yield (pi, cont, q + (src -> qs1))
+            case _ => Left(err)
+        }
 
     /* ... */
 
@@ -96,6 +126,17 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
 
     /* ... */
 
+    override def getActions(subj: Role): Set[LAction] = Set(LNu(subj, this.id))
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] =
+        val err = s"Cannot step $a in: ($pi, $this, $q)"
+        a match {
+            case LNu(subj, c) if c == this.id =>
+                Right((pi, LActiveMixed(this.id, this.left, this.obs, this.right), q))
+            case _ => Left(err)
+        }
+
     /* ... */
 
     override def toString: String =
@@ -111,6 +152,46 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
         LActiveMixed(this.id, this.left.subs(x), obs, this.right.subs(x))
 
     /* ... */
+
+    override def getActions(subj: Role): Set[LAction] =
+        val left = this.left.getActions(subj)
+        val right = this.right.getActions(subj)
+        if ((left intersect right).nonEmpty) {
+            throw new RuntimeException(s"Shouldn't get here: left=$left, right = $right\n\t$this")
+        } else {
+           left union right
+        }
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] =
+        val err = s"Cannot step $a in: ($pi, $this, $q)"
+        a match {
+            case LSend(src, dst, op, pay) => //Left(err)
+                val left = this.left.step(com, pi :+ pL, a, q)
+                val right = this.right.step(com, pi :+ pR, a, q)
+                (left, right) match {
+                    case (Right(pi1, l1, q1), Left(_)) =>   // LSnd
+                        Right((pi1, LActiveMixed(this.id, l1, this.obs, this.right), q1))
+                    case (Left(_), Right(pi1, l1, q1)) =>  // RSnd 
+                        Right((pi1, LActiveRight(this.id, l1), q1))
+                    case _ => Left(err)
+                }
+            case LRecv(src, dst, op, pay) =>
+                val left = this.left.step(com, pi :+ pL, a, q)
+                val right = this.right.step(com, pi :+ pR, a, q)
+                (left, right) match {
+                    case (Right(pi1, l1, q1), Left(_)) =>  // LRcv1
+                        if (com(this.id) contains op) {
+                            Right((pi1, LActiveLeft(this.id, l1), q1))
+                        } else {  // LRcv2
+                            Right((pi1, LActiveMixed(this.id, l1, this.obs, this.right), q1))
+                        }
+                    case (Left(_), Right(pi1, l1, q1)) =>  // RRcv -- subj == src == this.obs
+                        Right((pi1, LActiveRight(this.id, l1), q1))
+                    case _ => Left(err)
+                }
+            case _ => Left(err)
+        }
 
     /* ... */
 
@@ -128,6 +209,16 @@ case class LActiveLeft(id: Mid, left: LType) extends LType {
 
     /* ... */
 
+    override def getActions(subj: Role): Set[LAction] = this.left.getActions(subj)
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] =
+        val err = s"Cannot step $a in: ($pi, $this, $q)"
+        for {
+            left <- this.left.step(com, pi, a, q)
+            (pi1, _L1, q1) = left
+        } yield (pi1, LActiveLeft(this.id, _L1), q1)
+
     /* ... */
 
     override def toString: String =
@@ -142,6 +233,16 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
         LActiveRight(this.id, this.right.subs(x))
 
     /* ... */
+
+    override def getActions(subj: Role): Set[LAction] = this.right.getActions(subj)
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] =
+        val err = s"Cannot step $a in: ($pi, $this, $q)"
+        for {
+            left <- this.right.step(com, pi, a, q)
+            (pi1, _L1, q1) = left
+        } yield (pi1, LActiveRight(this.id, _L1), q1)
 
     /* ... */
 
@@ -158,6 +259,11 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
 
     /* ... */
 
+    override def getActions(subj: Role): Set[LAction] = unfold |> (_.getActions(subj))
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] = unfold.step(com, pi, a, q)
+
     /* ... */
 
     override def toString: String = s"rec ${this.rvar} . ${this.body}"
@@ -171,6 +277,12 @@ case class LRecVar(rvar: RecVar) extends LType {
 
     /* ... */
 
+    override def getActions(subj: Role): Set[LAction] = 
+        throw new RuntimeException(s"Shouldn't get here: $this")
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+        Either[String, (Path, LType, Sigma)] = Left(s"Cannot step $a in: $this")
+
     /* ... */
 
     override def toString: String = rvar.toString
@@ -183,6 +295,11 @@ object LEnd extends LType {
     override def subs(x: Map[RecVar, LType]): LEnd.type = this
 
     /* ... */
+
+    override def getActions(subj: Role): Set[LAction] = Set()
+
+    override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
+            Either[String, (Path, LType, Sigma)] = Left(s"Cannot step $a in: $this")
 
     /* ... */
 

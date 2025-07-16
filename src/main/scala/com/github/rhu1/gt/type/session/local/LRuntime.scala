@@ -108,7 +108,7 @@ object pR extends pLR {
 type Path = List[pLR]
 val EPSILON: Path = List.empty[pLR]
 
-case class Participant(r: Role, L: LType, q: Sigma) {
+case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 
     // Includes \rho when not "skip"
     def getActions: Set[YAction] = Set()
@@ -120,18 +120,21 @@ case class Participant(r: Role, L: LType, q: Sigma) {
 
     // Actual message communicated (if any) is LAction[Msg] version of (a, pi)
     private def stepPi(a: LAction): Either[String, (Path, Participant)] =
-        this.L.step(EPSILON, a, this.q).map((pi, L1, q1) =>
-            (pi, Participant(this.r, L1, q1)))
+        this.L.step(com, EPSILON, a, this.q).map((pi, L1, q1) =>
+            (pi, Participant(this.r, this.com, L1, q1)))
 
     def gc(a: LRho): Either[String, Participant] =
         Either.cond(a.subj != this.r,
             //throw new RuntimeException("TODO"),  // FIXME
-            Participant(this.r, L, this.q.gc(this.L)),
+            Participant(this.r, this.com, L, this.q.gc(this.L)),
             s"Cannot step $a in: $this"
         )
 }
 
 case class System(ps: Map[Role, Participant]) {
+
+    def getActions: Map[Role, Set[YAction]] =
+        this.ps.map((r, p) => (r, p.getActions))
 
     def step(a: YAction): Either[String, System] = a match {
         case LSend(src, dst, op, pay) =>
@@ -142,7 +145,7 @@ case class System(ps: Map[Role, Participant]) {
                 pp <- ps.step(a)
                 (pi, ps1) = pp
                 qs <- pd.q.get(src).map(_.appended(Msg(op, pay, pi))).toRight(err)
-                pd1 = Participant(dst, pd.L, pd.q + (src -> qs))
+                pd1 = Participant(dst, pd.com, pd.L, pd.q + (src -> qs))
             } yield System(this.ps + (src -> ps1) + (dst -> pd1))
         case _ =>  // Other LActions and LRho
             for {
