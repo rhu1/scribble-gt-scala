@@ -45,6 +45,7 @@ object Main {
         })
 
         println("\n[GT] Projecting:\n")
+
         translated.foreach((n, p) => {
             p.getLiveRoles.foreach(r => {p.project(r) match {
                     case Some(x) => println(s"$n@$r: ${x}")

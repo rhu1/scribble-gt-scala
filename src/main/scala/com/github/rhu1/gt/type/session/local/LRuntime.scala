@@ -132,8 +132,10 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 
 case class System(ps: Map[Role, Participant]) {
 
+    // Post: Set[YAction] nonEmpty
     def getActions: Map[Role, Set[YAction]] =
         this.ps.map((r, p) => (r, p.getActions))
+               .filter((r, as) => as.nonEmpty)
 
     def step(a: YAction): Either[String, System] = a match {
         case LSend(src, dst, op, pay) =>
@@ -153,3 +155,26 @@ case class System(ps: Map[Role, Participant]) {
             } yield System(this.ps + (a.subj -> p1._2))
     }
 }
+
+object System {
+    def run(s: System): Unit = {
+        var i = 0
+        var s1 = s
+        var ras = s1.getActions  // as nonEmpty
+        println(s"$i: $s1")
+        while (ras.nonEmpty) {
+            val (r, as) = ras.head
+            val a = as.head
+            print(s"$i: $a")
+            s1 = s1.step(a) match {
+                case Left(x) => throw new RuntimeException(x)
+                case Right(x) => x
+            }
+            ras = s1.getActions
+            i += 1
+            println(s" -> $s1")
+        }
+    }
+
+}
+
