@@ -16,7 +16,7 @@ trait LType extends SType {
     /*def unfoldAllOnce: LType = unfoldAllOnceAux(Set())
     protected[global] def unfoldAllOnceAux(done: Set[RecVar]): LType*/
 
-   def getActions: Set[LAction]
+    def getActions(subj: Role): Set[LAction]
 
     // Sigma is local (in) queue -- send queue managed by System.step
     def step(pi: Path, a: LAction, q: Sigma): Either[String, (Path, LType, Sigma)]
@@ -55,14 +55,15 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LSelect =
+    override def subs(x: Map[RecVar, LType]): LSelect =
         LSelect(this.dst, this.cases.map((k, v) => (k, v.subs(x))))
 
     /* ... */
 
-    //def getActions: Set[LAction[PreMsg]] =
+    override def getActions(subj: Role): Set[LAction] = this.cases.keySet.map(
+        (o, d) => LSend(subj, this.dst, o, d))
 
-    //def step(a: LAction, q: Sigma): Either[String, (LType, Sigma)]
+    override def step(a: LAction, q: Sigma): Either[String, (LType, Sigma)]
 
     /* ... */
 

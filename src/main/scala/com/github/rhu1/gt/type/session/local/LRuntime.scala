@@ -13,7 +13,7 @@ case class LRho(subj: Role) extends YAction {}
 
 sealed trait LAction extends YAction { }
 
-// !!! same as GAction -- not using Msg, correspondence just erases pi...
+// !!! Same as GAction -- N.B. not using Msg, correspondence just erases pi anyway...
 sealed abstract class LIO extends LAction {
     val src: Role
     val dst: Role
@@ -45,7 +45,7 @@ case class Sig(op: Op, pay: Payload) {
     override def toString: String = s"$op($pay)"
 }*/
 
-// !!! m = alpha
+// !!! m = alpha  // Actual queue contents (cf. LAction, no pi)
 case class Msg(op: Op, pay: Payload, pi: Path) {
 
     def isStale(L: LType): Boolean = Msg.isStaleAux(this.pi, L)
@@ -114,19 +114,20 @@ case class Participant(r: Role, L: LType, q: Sigma) {
     def getActions: Set[YAction] = Set()
 
     def step(a: YAction): Either[String, (Path, Participant)] = a match {
-        case a: LRho => gc(a).map(x => (EPSILON, x))
+        case a: LRho => gc(a).map(x => (EPSILON, x))  // gc top level, pi unused anyway
         case a: LAction => stepPi(a)
     }
 
     // Actual message communicated (if any) is LAction[Msg] version of (a, pi)
     private def stepPi(a: LAction): Either[String, (Path, Participant)] =
-        this.L.step(EPSILON, a, this.q).map((pi, L1, q1) => 
+        this.L.step(EPSILON, a, this.q).map((pi, L1, q1) =>
             (pi, Participant(this.r, L1, q1)))
 
     def gc(a: LRho): Either[String, Participant] =
         Either.cond(a.subj != this.r,
-            this,  // FIXME
-            "Cannot step $a in: $this"
+            //throw new RuntimeException("TODO"),  // FIXME
+            Participant(this.r, L, this.q.gc(this.L)),
+            s"Cannot step $a in: $this"
         )
 }
 
