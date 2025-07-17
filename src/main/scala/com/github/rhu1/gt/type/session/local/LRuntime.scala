@@ -50,7 +50,9 @@ case class Msg(op: Op, pay: Payload, pi: Path) {
 
     def isStale(L: LType): Boolean = Msg.isStaleAux(this.pi, L)
 
-    override def toString: String = s"$op($pay, $pi)"
+    override def toString: String =
+        val pay = if (this.pay.elems.isEmpty) "" else s"$this.pay, "
+        s"$op($pay$pi)"
 }
 
 object Msg {
@@ -102,9 +104,11 @@ implicit class SigmaOps[A <: Sigma](a: A) {
 sealed trait pLR {}
 object pL extends pLR {
     def unapply(x: pLR): Boolean = true
+    override def toString: String = "l"
 }
 object pR extends pLR {
     def unapply(x: pLR): Boolean = true
+    override def toString: String = "r"
 }
 
 type Path = List[pLR]
@@ -115,7 +119,7 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
     // Includes LRho when not a "skip"
     def getActions: Set[YAction] =
         val gc: Set[YAction] = if (this.q.containsStale(this.L)) Set(LRho(this.r)) else Set.empty[YAction]
-        gc ++ this.L.getActions(this.r)  // cf. union
+        gc ++ this.L.getActions(this.r, EPSILON, q)  // cf. union
 
     def step(a: YAction): Either[String, (Path, Participant)] = a match {
         case a: LRho => gc(a).map(x => (EPSILON, x))  // gc top level, pi unused anyway
@@ -146,9 +150,9 @@ case class LSystem(ps: Map[Role, Participant]) {
             val err = s"Cannot step $a in: $this"
             for {
                 ps <- this.ps.get(src).toRight(err)
-                pd <- this.ps.get(dst).toRight(err)
                 pp <- ps.step(a)
                 (pi, ps1) = pp
+                pd <- this.ps.get(dst).toRight(err)
                 qs <- pd.q.get(src).map(_.appended(Msg(op, pay, pi))).toRight(err)
                 pd1 = Participant(dst, pd.com, pd.L, pd.q + (src -> qs))
             } yield LSystem(this.ps + (src -> ps1) + (dst -> pd1))
@@ -159,26 +163,31 @@ case class LSystem(ps: Map[Role, Participant]) {
             } yield LSystem(this.ps + (a.subj -> p1._2))
     }
 
-    def run: Unit = LSystem.run(this)
+    def run(): Unit = LSystem.run(this)
+
+    override def toString: String =
+        val ps = this.ps.mkString("\n\t")
+        s"LSystem(\n\t$ps)"
 }
 
 object LSystem {
+
     def run(s: LSystem): Unit = {
         var i = 0
         var s1 = s
         var ras = s1.getActions  // as nonEmpty
-        println(s"$i: $s1 -- $ras")
+        println(s"$s1\n\tactions=$ras")
         while (ras.nonEmpty) {
             val (r, as) = ras.head
             val a = as.head
-            print(s"$i: $a")
+            print(s"$i: - $a")
             s1 = s1.step(a) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
             ras = s1.getActions
             i += 1
-            println(s" -> $s1")
+            println(s" -> $s1\n\tactions=$ras")
         }
     }
 

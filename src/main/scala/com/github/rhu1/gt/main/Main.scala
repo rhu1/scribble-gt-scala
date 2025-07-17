@@ -59,8 +59,8 @@ object Main {
         println("\n[GT] Executing:\n")
         for ((n, rL) <- projected) {
             val Y = toSystem(n, translated(n), projected(n))
-            println(Y)
-            Y.run
+            //println(Y)
+            Y.run()
         }
     }
 

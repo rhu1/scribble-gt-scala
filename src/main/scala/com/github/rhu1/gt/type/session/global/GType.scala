@@ -380,8 +380,10 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 Map()
             } else {
                 // !!! reset com
-                val left = this.left.cases.values.map(_.getNotCommittingAux(true, c, Set(this.obs)))
-                val right = this.right.cases.values.map(_.getNotCommittingAux(true, c, Set(this.obs, this.other)))
+                val left = this.left.cases.values.map(
+                    _.getNotCommittingAux(true, c, Set(this.obs)))
+                val right = this.right.cases.values.map(
+                    _.getNotCommittingAux(true, c, Set(this.obs, this.other)))
                 //GType.mergeRoleOps(left, right)
                 val dbug = right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
                 //println(s"WF3333: ${c}: ${dbug} ,, ${this}")

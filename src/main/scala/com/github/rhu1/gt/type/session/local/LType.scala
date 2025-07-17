@@ -1,5 +1,6 @@
 package com.github.rhu1.gt.`type`.session.local
 
+import com.github.rhu1.gt.`type`.session
 import com.github.rhu1.gt.`type`.session.*
 import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 
@@ -16,7 +17,8 @@ trait LType extends SType {
     /*def unfoldAllOnce: LType = unfoldAllOnceAux(Set())
     protected[global] def unfoldAllOnceAux(done: Set[RecVar]): LType*/
 
-    def getActions(subj: Role): Set[LAction]
+    // Pre: q.keySet contains all relevant roles
+    def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction]
 
     // Sigma is local (in) queue -- send queue managed by System.step
     def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -61,7 +63,7 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] =
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         this.cases.keySet.map((o, d) => LSend(subj, this.dst, o, d))
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -78,7 +80,7 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
     /* ... */
 
     override def toString: String =
-        s"${this.dst}&${SType.casesToString(this.cases)}"
+        s"${this.dst}${ConsoleColours.OLPLUS}${SType.casesToString(this.cases)}"
 }
 
 case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LType {
@@ -90,8 +92,11 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] =
-        this.cases.keySet.map((o, d) => LRecv(subj, this.src, o, d))
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        q(this.src).find(m => this.cases.contains(m.op, m.pay) && m.pi == pi) match {
+            case None => Set()
+            case Some(x) => Set(LRecv(this.src, subj, x.op, x.pay))
+        }
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
@@ -113,7 +118,7 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
     /* ... */
 
     override def toString: String =
-        s"${this.src}${ConsoleColours.OLPLUS}${SType.casesToString(this.cases)}"
+        s"${this.src}&${SType.casesToString(this.cases)}"
 }
 
 // !!! consider LOtherMixed, LObserverMixed
@@ -126,7 +131,8 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = Set(LNu(subj, this.id))
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        Set(LNu(subj, this.id))
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
@@ -153,9 +159,9 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] =
-        val left = this.left.getActions(subj)
-        val right = this.right.getActions(subj)
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        val left = this.left.getActions(subj, pi :+ pL, q)
+        val right = this.right.getActions(subj, pi :+ pR, q)
         if ((left intersect right).nonEmpty) {
             throw new RuntimeException(s"Shouldn't get here: left=$left, right = $right\n\t$this")
         } else {
@@ -209,13 +215,14 @@ case class LActiveLeft(id: Mid, left: LType) extends LType {
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = this.left.getActions(subj)
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        this.left.getActions(subj, pi :+ pL, q)
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
         val err = s"Cannot step $a in: ($pi, $this, $q)"
         for {
-            left <- this.left.step(com, pi, a, q)
+            left <- this.left.step(com, pi :+ pL, a, q)
             (pi1, _L1, q1) = left
         } yield (pi1, LActiveLeft(this.id, _L1), q1)
 
@@ -234,14 +241,15 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = this.right.getActions(subj)
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        this.right.getActions(subj, pi :+ pR, q)
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
         val err = s"Cannot step $a in: ($pi, $this, $q)"
         for {
-            left <- this.right.step(com, pi, a, q)
-            (pi1, _L1, q1) = left
+            right <- this.right.step(com, pi :+ pR, a, q)
+            (pi1, _L1, q1) = right
         } yield (pi1, LActiveRight(this.id, _L1), q1)
 
     /* ... */
@@ -259,7 +267,8 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = unfold |> (_.getActions(subj))
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        unfold |> (_.getActions(subj, pi, q))
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] = unfold.step(com, pi, a, q)
@@ -277,7 +286,7 @@ case class LRecVar(rvar: RecVar) extends LType {
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = 
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         throw new RuntimeException(s"Shouldn't get here: $this")
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -296,7 +305,7 @@ object LEnd extends LType {
 
     /* ... */
 
-    override def getActions(subj: Role): Set[LAction] = Set()
+    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] = Set()
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] = Left(s"Cannot step $a in: $this")
