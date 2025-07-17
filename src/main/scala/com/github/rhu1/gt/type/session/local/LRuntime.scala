@@ -51,7 +51,7 @@ case class Msg(op: Op, pay: Payload, pi: Path) {
     def isStale(L: LType): Boolean = Msg.isStaleAux(this.pi, L)
 
     override def toString: String =
-        val pay = if (this.pay.elems.isEmpty) "" else s"$this.pay, "
+        val pay = if (this.pay.elems.isEmpty) "" else s"${this.pay}, "
         s"$op($pay$pi)"
 }
 
@@ -201,18 +201,20 @@ object LSystem {
                     throw new RuntimeException(s"Stuck: $pi: $Y")
                 }
                 println(s"$top\t${h._1} terminated.")
-            /*else if (h._2.size > 12) {
-                println(s"$top\tPruning ${h._1} at ${h._2} ...")*/
-            } else if (pi.size > 3) {
-                println(s"$top\tPruning ${h._1} at ${pi} ...")
             } else {
-                for (r, as) <- ras; a <- as do // as nonEmpty
-                    val s = (Y, (r, a)) // r == a.subj, redundant
-                    if (done.contains(s)) {
-                        println(s"$top\t${hist(s._1)._1}, $a already done.")
-                    } else {
-                        todo += s
-                    }
+                if (pi.size > 3) {
+                    println(s"$top\tPruning ${h._1} at ${pi} ...")
+                } else if (h._2.size > 12) {  // cf. non-terminating rec within MC
+                    println(s"$top\tPruning ${h._1} at ${h._2} ...")
+                } else {
+                    for (r, as) <- ras; a <- as do // as nonEmpty
+                        val s = (Y, (r, a)) // r == a.subj, redundant
+                        if (done.contains(s)) {
+                            println(s"$top\t${hist(s._1)._1}, $a already done.")
+                        } else {
+                            todo += s
+                        }
+                }
             }
         }
 

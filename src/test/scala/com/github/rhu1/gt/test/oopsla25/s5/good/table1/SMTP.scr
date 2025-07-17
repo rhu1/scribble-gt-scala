@@ -8,6 +8,7 @@ global protocol SMTP(role S, role C)
 	mixed{
 	choice at C {
     		Ehlo() from C to S;
+    		EhloCommit() from S to C;  // !!!
     		rec X {
     			choice at S {
     				//250 from S to C;
@@ -20,7 +21,7 @@ global protocol SMTP(role S, role C)
                     	220() from S to C;
                     	// Do TLS handshake here: level below the application level protocol (like regular TCP handshake)
                     	choice at C {
-                        		Ehlo() from C to S;
+                        		Ehlo1() from C to S;  // !!!
                         		rec X {
                         			choice at S {
                         				250d() from S to C;
@@ -104,8 +105,8 @@ global protocol SMTP(role S, role C)
     			}
     		}
     	} or {
-    		Quit() from C to S;
-    		Ack() from S to C; //extra message
+    		QuitCommit() from C to S;  // !!!
+    		AckCommit() from S to C; //extra message  // !!!
     	}
 
     	} or C -> S {
