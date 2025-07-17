@@ -12,13 +12,15 @@ trait LType extends SType {
 
     def unfold: LType = this
 
-    def unfoldAllImmediate: LType = this
+    //def unfoldAllImmediate: LType = this
 
-    /*def unfoldAllOnce: LType = unfoldAllOnceAux(Set())
-    protected[global] def unfoldAllOnceAux(done: Set[RecVar]): LType*/
+    def unfoldAllOncePrefix: LType = unfoldAllOncePrefixAux(Set())
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType
 
     // Pre: q.keySet contains all relevant roles
-    def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction]
+    def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        unfoldAllOncePrefix |> (_.getActionsAux(subj, pi, q))
+    protected[local] def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction]
 
     // Sigma is local (in) queue -- send queue managed by System.step
     def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -61,9 +63,12 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
     override def subs(x: Map[RecVar, LType]): LSelect =
         LSelect(this.dst, this.cases.map((k, v) => (k, v.subs(x))))
 
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LSelect(this.dst, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))
+
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         this.cases.keySet.map((o, d) => LSend(subj, this.dst, o, d))
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -90,9 +95,12 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
     def subs(x: Map[RecVar, LType]): LBranch =
         LBranch(this.src, this.cases.map((k, v) => (k, v.subs(x))))
 
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LBranch(this.src, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))
+
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         q(this.src).find(m => this.cases.contains(m.op, m.pay) && m.pi == pi) match {
             case None => Set()
             case Some(x) => Set(LRecv(this.src, subj, x.op, x.pay))
@@ -127,11 +135,14 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
     /* ... */
 
     def subs(x: Map[RecVar, LType]): LMixed =
-        LMixed(this.id, this.left.subs(x), obs, this.right.subs(x))
+        LMixed(this.id, this.left.subs(x), this.obs, this.right.subs(x))
+
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))
 
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         Set(LNu(subj, this.id))
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -155,14 +166,17 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
     /* ... */
 
     def subs(x: Map[RecVar, LType]): LActiveMixed =
-        LActiveMixed(this.id, this.left.subs(x), obs, this.right.subs(x))
+        LActiveMixed(this.id, this.left.subs(x), this.obs, this.right.subs(x))
+
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LActiveMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))
 
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         // !!! includes context rule \nu's
-        val left = this.left.getActions(subj, pi :+ pL, q)
-        val right = this.right.getActions(subj, pi :+ pR, q)
+        val left = this.left.getActionsAux(subj, pi :+ pL, q)
+        val right = this.right.getActionsAux(subj, pi :+ pR, q)
         if ((left intersect right).nonEmpty) {
             throw new RuntimeException(s"Shouldn't get here: left=$left, right = $right\n\t$this")
         } else {
@@ -224,10 +238,13 @@ case class LActiveLeft(id: Mid, left: LType) extends LType {
     def subs(x: Map[RecVar, LType]): LActiveLeft =
         LActiveLeft(this.id, this.left.subs(x))
 
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LActiveLeft(this.id, this.left.unfoldAllOncePrefixAux(done))
+
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
-        this.left.getActions(subj, pi :+ pL, q)
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        this.left.getActionsAux(subj, pi :+ pL, q)
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
@@ -250,10 +267,13 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
     def subs(x: Map[RecVar, LType]): LActiveRight =
         LActiveRight(this.id, this.right.subs(x))
 
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LActiveRight(this.id, this.right.unfoldAllOncePrefixAux(done))
+
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
-        this.right.getActions(subj, pi :+ pR, q)
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        this.right.getActionsAux(subj, pi :+ pR, q)
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
@@ -273,13 +293,22 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LType =
+    override def subs(x: Map[RecVar, LType]): LType =
         if (x.contains(this.rvar)) this else LRec(this.rvar, this.body.subs(x))
+
+    override def unfold: LType = this.body.subs(Map(this.rvar -> this))
+
+    override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        if (done.contains(this.rvar)) {
+            LEnd
+        } else {
+            unfold |> (_.unfoldAllOncePrefixAux(done + this.rvar))
+        }
 
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
-        unfold |> (_.getActions(subj, pi, q))
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        unfold |> (_.getActionsAux(subj, pi, q))
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] = unfold.step(com, pi, a, q)
@@ -295,9 +324,12 @@ case class LRecVar(rvar: RecVar) extends LType {
 
     override def subs(x: Map[RecVar, LType]): LType = x.getOrElse(this.rvar, this)
 
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        throw new RuntimeException(s"Shouldn't get here: $this")
+
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] =
         throw new RuntimeException(s"Shouldn't get here: $this")
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
@@ -315,9 +347,11 @@ object LEnd extends LType {
 
     override def subs(x: Map[RecVar, LType]): LEnd.type = this
 
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LEnd.type = this
+
     /* ... */
 
-    override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] = Set()
+    override def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction] = Set()
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =

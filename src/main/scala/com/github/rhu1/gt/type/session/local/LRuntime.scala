@@ -187,14 +187,20 @@ object LSystem {
                 hist += (Y1 -> (nextN, hist(Y)._2 :+ a))
             }
         }
+        // Pre: Y in hist.keySet
         def addTodo(top: String, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
-            for (r, as) <- ras; a <- as do // as nonEmpty
-                val s = (Y, (r, a)) // r == a.subj, redundant
-                if (done.contains(s)) {
-                    println(s"$top\t${hist(s._1)._1}, $a done")
-                } else {
-                    todo += s
-                }
+            val h = hist(Y)
+            if (h._2.size > 12) {
+                println(s"$top\tPruning ${h._1} at ${h._2} ...")
+            } else {
+                for (r, as) <- ras; a <- as do // as nonEmpty
+                    val s = (Y, (r, a)) // r == a.subj, redundant
+                    if (done.contains(s)) {
+                        println(s"$top\t${hist(s._1)._1}, $a done.")
+                    } else {
+                        todo += s
+                    }
+            }
         }
 
         hist(Y) = (nextN, List.empty)
@@ -219,7 +225,7 @@ object LSystem {
             }
             val ras1 = succ.getActions
             addHist(_Y1, a1, succ)
-            println(indent("", ind, s" -> ${hist(succ)._1} $succ\n\tactions=$ras1"))
+            println(indent("", ind, s" -> ${hist(succ)._1} $succ\n\tactions=$ras1"))  // Assumes addHist
             addTodo(ind, succ, ras1)
             n += 1
         }

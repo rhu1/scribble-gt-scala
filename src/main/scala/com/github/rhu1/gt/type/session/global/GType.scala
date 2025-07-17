@@ -58,7 +58,7 @@ trait GType extends SType {
         }
         val isect = getMids.filter(c => checkForIsect(getCommittingC(c), getNotCommittingC(c)))
         if (isect.nonEmpty) {
-            isect.foreach(x => println(s"WF1111: $x\n${getCommittingC(x)}\n${getNotCommittingC(x)}"))
+            isect.foreach(x => println(s"WF1111: $x\n\t${getCommittingC(x)}\n\t${getNotCommittingC(x)}"))
         }
         isect.isEmpty
 
@@ -193,12 +193,11 @@ case class GInteraction(
             (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, com + this.dst)))
                 .reduce(GType.unionRoleOps)
         } else {
-            val tmp = com + this.dst
             val imm = if (!entered) Map() else Map(
                 //this.src -> this.cases.keySet.map((op, _) => op),  // !!! ignoring sender ops...
                 this.dst -> this.cases.keySet.map((op, _) => op)
             )
-            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, tmp)))
+            (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, com)))
                 .reduce(GType.unionRoleOps)
         }
 
@@ -469,14 +468,14 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
     override def subs(x: Map[RecVar, GType]): GRec =
         if (x.contains(this.rvar)) this else GRec(this.rvar, this.body.subs(x))
 
+    override def unfold: GType = this.body.subs(Map(this.rvar -> this))
+
     override def unfoldAllOnceAux(done: Set[RecVar]): GType =
         if (done.contains(this.rvar)) {
             this
         } else {
             unfold |> (_.unfoldAllOnceAux(done + this.rvar))
         }
-
-    override def unfold: GType = this.body.subs(Map(this.rvar -> this))
 
     override def unfoldAllImmediate: GType = unfold |> (_.unfold) // Assumes contractive...
 
@@ -599,7 +598,7 @@ object GEnd extends GType {
 
     override def subs(x: Map[RecVar, GType]): GEnd.type = this
 
-    override def unfoldAllOnceAux(done: Set[RecVar]): GType = this
+    override def unfoldAllOnceAux(done: Set[RecVar]): GEnd.type = this
 
     override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean = false
 

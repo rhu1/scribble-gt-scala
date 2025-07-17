@@ -4,12 +4,16 @@ import com.github.rhu1.gt.*
 import com.github.rhu1.gt.`type`.session.*
 import com.github.rhu1.gt.`type`.session.global.{GType, Scrib2GT}
 import com.github.rhu1.gt.`type`.session.local.*
-import com.github.rhu1.gt.`type`.session.local.LSystem.run
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
 
 import scala.jdk.CollectionConverters.*
+
+// TODO
+// - Either[Exception, ..]
+// - balanced up-to
+
 
 object Main {
 
