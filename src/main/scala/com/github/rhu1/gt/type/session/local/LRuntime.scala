@@ -173,41 +173,51 @@ case class LSystem(ps: Map[Role, Participant]) {
 
 object LSystem {
 
-    def run(s: LSystem): Unit = {
-        val done = collection.mutable.LinkedHashSet[(LSystem, (Role, YAction))]()
-        val todo = collection.mutable.LinkedHashSet[(LSystem, (Role, YAction))]()
-        def addTodo(s: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
-            //val ras = s1.getActions
+    def run(Y: LSystem): Unit = {
+        var n = 0
+        def nextN: Int = { n += 1; n }
+
+        val hist = collection.mutable.Map.empty[LSystem, (Integer, List[YAction])]
+        val done = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
+        val todo = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
+        // Pre: ras = _Y1.getActions -- split for debugging
+        def addHist(Y: LSystem, a: YAction, Y1: LSystem): Unit = {
+            if (!hist.contains(Y1)) {
+                hist += (Y1 -> (nextN, hist(Y)._2 :+ a))
+            }
+        }
+        def addTodo(Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
             for (r, as) <- ras; a <- as do // as nonEmpty
-                val state = (s, (r, a)) // r == a.subj, redundant
-                if (done.contains(state)) {
+                val s = (Y, (r, a)) // r == a.subj, redundant
+                if (done.contains(s)) {
                     println(s"\t$a done")
                 } else {
-                    todo += state
+                    todo += s
                 }
         }
 
-        val ras = s.getActions
-        addTodo(s, ras)
-        println(s"$s\n\tactions=$ras\n---")
+        hist(Y) = (nextN, List.empty)
+        val ras = Y.getActions
+        addTodo(Y, ras)
+        println(s"$Y\n\tactions=$ras\n---")
 
-        var i = 0
-        def nexti: Int = { i += 1; i }
         while (todo.nonEmpty) {
             val pop = todo.last
             todo -= pop
             done += pop
-            val (s2, (_, a)) = pop  // r == a.subj, redundant
-            println(s"$s2")
-            print(s"$i: - $a")
-            val s1 = s2.step(a) match {
+            val (_Y1, (_, a1)) = pop  // r == a1.subj, redundant
+            val (i, trace) = hist(_Y1)
+            println(s"$i $_Y1")
+            print(s"$trace |- $a1")
+            val succ = _Y1.step(a1) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
-            val ras1 = s1.getActions
-            println(s" -> $s1\n\tactions=$ras1")
-            addTodo(s1, ras1)
-            i += 1
+            val ras1 = succ.getActions
+            addHist(_Y1, a1, succ)
+            addTodo(succ, ras1)
+            println(s" -> ${hist(succ)._1} $succ\n\tactions=$ras1")
+            n += 1
         }
     }
 
