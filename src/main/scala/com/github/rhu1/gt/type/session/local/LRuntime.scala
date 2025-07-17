@@ -176,6 +176,7 @@ object LSystem {
     def run(Y: LSystem): Unit = {
         var n = 0
         def nextN: Int = { n += 1; n }
+        def indent(top: String, par: String, x: String) = top + x.replaceAll("\\n", s"\n$par")
 
         val hist = collection.mutable.Map.empty[LSystem, (Integer, List[YAction])]
         val done = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
@@ -186,11 +187,11 @@ object LSystem {
                 hist += (Y1 -> (nextN, hist(Y)._2 :+ a))
             }
         }
-        def addTodo(Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
+        def addTodo(top: String, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
             for (r, as) <- ras; a <- as do // as nonEmpty
                 val s = (Y, (r, a)) // r == a.subj, redundant
                 if (done.contains(s)) {
-                    println(s"\t$a done")
+                    println(s"$top\t${hist(s._1)._1}, $a done")
                 } else {
                     todo += s
                 }
@@ -198,25 +199,28 @@ object LSystem {
 
         hist(Y) = (nextN, List.empty)
         val ras = Y.getActions
-        addTodo(Y, ras)
+        addTodo("", Y, ras)
         println(s"$Y\n\tactions=$ras\n---")
 
+        def todoString = todo.map(x => "(" + hist(x._1)._1.toString + ", " + x._2._2 + ")").mkString("; ")
         while (todo.nonEmpty) {
+            println(s"todo: $todoString")
             val pop = todo.last
             todo -= pop
             done += pop
             val (_Y1, (_, a1)) = pop  // r == a1.subj, redundant
             val (i, trace) = hist(_Y1)
-            println(s"$i $_Y1")
-            print(s"$trace |- $a1")
+            val ind = "    " * trace.size
+            println(indent(ind, ind, s"$i: $_Y1"))
+            print(indent(ind, ind, s"\t$trace |- $a1"))
             val succ = _Y1.step(a1) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
             val ras1 = succ.getActions
             addHist(_Y1, a1, succ)
-            addTodo(succ, ras1)
-            println(s" -> ${hist(succ)._1} $succ\n\tactions=$ras1")
+            println(indent("", ind, s" -> ${hist(succ)._1} $succ\n\tactions=$ras1"))
+            addTodo(ind, succ, ras1)
             n += 1
         }
     }
