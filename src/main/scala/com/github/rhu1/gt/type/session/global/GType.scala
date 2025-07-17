@@ -31,14 +31,14 @@ trait GType extends SType {
 
     /* static */
 
-    // Post: Role keySet == getMids HERE HERE TODO
-    def getCommitting(): Map[Mid, Map[Role, Set[Op]]] =  // ...removing parens causing "overload ambiguity" ?
-        getMids.map(c => (c, getCommitting(c))).toMap
+    // Post: values only include Role for nonEmpty Set[Op]
+    def getCommitting: Map[Mid, Map[Role, Set[Op]]] =  // ...removing parens causing "overload ambiguity" ?
+        getMids.map(c => (c, getCommittingC(c))).toMap
 
-    // Only includes Role with nonEmpty Set
-    def getCommitting(c: Mid): Map[Role, Set[Op]] =
+    // Post: keySet only includes Role for nonEmpty Set[Op]
+    def getCommittingC(c: Mid): Map[Role, Set[Op]] =
         unfoldAllOnce |> (_.getCommittingAux(false, c, Set()))
-    protected[global]def getNotCommitting(c: Mid): Map[Role, Set[Op]] =
+    protected[global]def getNotCommittingC(c: Mid): Map[Role, Set[Op]] =
         unfoldAllOnce |> (_.getNotCommittingAux(false, c, Set()))
 
     protected[global] def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
@@ -56,9 +56,9 @@ trait GType extends SType {
                 dbug
             })
         }
-        val isect = getMids.filter(c => checkForIsect(getCommitting(c), getNotCommitting(c)))
+        val isect = getMids.filter(c => checkForIsect(getCommittingC(c), getNotCommittingC(c)))
         if (isect.nonEmpty) {
-            isect.foreach(x => println(s"WF1111: $x\n${getCommitting(x)}\n${getNotCommitting(x)}"))
+            isect.foreach(x => println(s"WF1111: $x\n${getCommittingC(x)}\n${getNotCommittingC(x)}"))
         }
         isect.isEmpty
 
@@ -94,13 +94,15 @@ trait GType extends SType {
 
     def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType]
 
+
+    // Post: keySet == getLiveRoles
     def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
-        val com = getCommitting()
+        val com = getCommitting
         /*val s = com.toSeq.flatMap((c, rops) => rops.toSeq.map((r, ops) => (r, (c, ops))))
         s.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
             case (acc, (r, (c, ops))) =>
                 acc + (r -> (acc.getOrElse(r, Map.empty[Mid, Set[Op]]) + (c -> ops)))  // c's disjoint per r*/
-        com.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
+        val rcom = com.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
             case (acc, (c, rops)) =>
                 (acc.keySet union rops.keySet).map(r => (
                     r,
@@ -110,6 +112,7 @@ trait GType extends SType {
                       gacc + (c -> gcom) }
                 )).toMap
         }
+        getLiveRoles.map(r => (r, rcom.getOrElse(r, Map.empty[Mid, Set[Op]]))).toMap
 }
 
 
@@ -117,10 +120,10 @@ object GType {
 
     /* ... */
 
-    def mergeRoleOps(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Map[Role, Set[Op]] =
-        y.foldLeft(x)({ case (acc, (r, ops)) =>
+    def unionRoleOps(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Map[Role, Set[Op]] =
+        y.foldLeft(x) { case (acc, (r, ops)) =>
             acc + (r -> (acc.getOrElse(r, Set()) ++ ops))
-        })
+        }
 
     /*def mergeCommitting
             (x: Map[Mid, Map[Role, Set[Op]]], y: Map[Mid, Map[Role, Set[Op]]]):
@@ -130,6 +133,7 @@ object GType {
         })*/
 
     def isectDeps(x: Map[Role, Set[Role]], y: Map[Role, Set[Role]]): Map[Role, Set[Role]] =
+        // fold better
         x.keySet.intersect(y.keySet).map(r => (
             r,
             //(for { xr <- x.get(r); yr <- y.get(r); res = xr.intersect(yr) } yield res).get
@@ -138,6 +142,7 @@ object GType {
         )).toMap
 
     def unionDeps(x: Map[Role, Set[Role]], y: Map[Role, Set[Role]]): Map[Role, Set[Role]] =
+        // fold better
         x.keySet.union(y.keySet).map(r => (
             r,
             { val (xr, yr) = (x.getOrElse(r, Set()), y.getOrElse(r, Set())); xr.union(yr) }
@@ -176,9 +181,9 @@ case class GInteraction(
         if (!com.contains(this.dst) && com.contains(this.src)) {
             val imm = if (!entered) Map() else Map(this.dst -> this.cases.keySet.map((op, _) => op))
             (Seq(imm) ++ this.cases.values.map(_.getCommittingAux(entered, c, com + this.dst)))
-                .reduce(GType.mergeRoleOps)
+                .reduce(GType.unionRoleOps)
         } else {
-            this.cases.map(x => x._2.getCommittingAux(entered, c, com)).reduce(GType.mergeRoleOps)
+            this.cases.map(x => x._2.getCommittingAux(entered, c, com)).reduce(GType.unionRoleOps)
         }
 
     override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
@@ -186,7 +191,7 @@ case class GInteraction(
             //val imm = Map(this.src -> this.cases.keySet.map((op, _) => op))
             val imm = Map[Role, Set[Op]]()  // !!! ignoring sender ops...
             (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, com + this.dst)))
-                .reduce(GType.mergeRoleOps)
+                .reduce(GType.unionRoleOps)
         } else {
             val tmp = com + this.dst
             val imm = if (!entered) Map() else Map(
@@ -194,7 +199,7 @@ case class GInteraction(
                 this.dst -> this.cases.keySet.map((op, _) => op)
             )
             (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, tmp)))
-                .reduce(GType.mergeRoleOps)
+                .reduce(GType.unionRoleOps)
         }
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] =
@@ -237,7 +242,7 @@ case class GInteraction(
 
     override def isClearTermination: Boolean =
         val dbug = this.cases.forall(_._2.isClearTermination)
-        if (!dbug) println(s"CT2222: ${this}")
+        //if (!dbug) println(s"CT2222: ${this}")
         dbug
 
     override protected[global] def isBalancedAux: Boolean =
@@ -357,16 +362,16 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 val right = this.right.cases.values.map(_.getCommittingAux(true, c, Set(this.obs, this.other)))
                 //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
 
-                val dbugl = left.foldLeft(imm)(GType.mergeRoleOps)
-                val dbug = dbugl |> (a => right.foldLeft(a)(GType.mergeRoleOps))
-                println(s"WF2222: ${c}: ${imm} ,, ${left} ,, ${dbugl} ,, ${dbug}")
+                val dbugl = left.foldLeft(imm)(GType.unionRoleOps)
+                val dbug = dbugl |> (a => right.foldLeft(a)(GType.unionRoleOps))
+                //println(s"WF2222: ${c}: ${imm} ,, ${left} ,, ${dbugl} ,, ${dbug}")
                 dbug
             }
         } else {
             //GType.mergeRoleOps(this.left.getCommittingAux(c, com), this.right.getCommittingAux(c, com))
             val left = this.left.cases.values.map(_.getCommittingAux(entered, c, com))
             val right = this.right.cases.values.map(_.getCommittingAux(entered, c, com))
-            right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
+            right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
         }
 
     override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
@@ -378,7 +383,7 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 val left = this.left.cases.values.map(_.getNotCommittingAux(true, c, Set(this.obs)))
                 val right = this.right.cases.values.map(_.getNotCommittingAux(true, c, Set(this.obs, this.other)))
                 //GType.mergeRoleOps(left, right)
-                val dbug = right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
+                val dbug = right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
                 //println(s"WF3333: ${c}: ${dbug} ,, ${this}")
                 dbug
             }
@@ -386,7 +391,7 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
             //GType.mergeRoleOps(this.left.getNotCommittingAux(c, com), this.right.getNotCommittingAux(c, com))
             val left = this.left.cases.values.map(_.getNotCommittingAux(entered, c, com))
             val right = this.right.cases.values.map(_.getNotCommittingAux(entered, c, com))
-            right.foldLeft(left.reduce(GType.mergeRoleOps))(GType.mergeRoleOps)
+            right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
         }
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] =

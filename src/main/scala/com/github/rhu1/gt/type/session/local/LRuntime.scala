@@ -94,7 +94,9 @@ implicit class SigmaOps[A <: Sigma](a: A) {
             None
         }
 
-    def gc(L: LType): Sigma = a.map((r, q) => (r, q.filter(!_.isStale(L))))
+    def containsStale(L: LType): Boolean = a.values.exists(ms => ms.exists(_.isStale(L)))
+
+    def gc(L: LType): Sigma = a.map((r, ms) => (r, ms.filter(!_.isStale(L))))
 }
 
 sealed trait pLR {}
@@ -110,8 +112,10 @@ val EPSILON: Path = List.empty[pLR]
 
 case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 
-    // Includes \rho when not "skip"
-    def getActions: Set[YAction] = Set()
+    // Includes LRho when not a "skip"
+    def getActions: Set[YAction] =
+        val gc: Set[YAction] = if (this.q.containsStale(this.L)) Set(LRho(this.r)) else Set.empty[YAction]
+        gc ++ this.L.getActions(this.r)  // cf. union
 
     def step(a: YAction): Either[String, (Path, Participant)] = a match {
         case a: LRho => gc(a).map(x => (EPSILON, x))  // gc top level, pi unused anyway
@@ -154,6 +158,8 @@ case class LSystem(ps: Map[Role, Participant]) {
                 p1 <- p.step(a)
             } yield LSystem(this.ps + (a.subj -> p1._2))
     }
+
+    def run: Unit = LSystem.run(this)
 }
 
 object LSystem {
@@ -161,7 +167,7 @@ object LSystem {
         var i = 0
         var s1 = s
         var ras = s1.getActions  // as nonEmpty
-        println(s"$i: $s1")
+        println(s"$i: $s1 -- $ras")
         while (ras.nonEmpty) {
             val (r, as) = ras.head
             val a = as.head

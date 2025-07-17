@@ -4,6 +4,7 @@ import com.github.rhu1.gt.*
 import com.github.rhu1.gt.`type`.session.*
 import com.github.rhu1.gt.`type`.session.global.{GType, Scrib2GT}
 import com.github.rhu1.gt.`type`.session.local.*
+import com.github.rhu1.gt.`type`.session.local.LSystem.run
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
@@ -57,16 +58,18 @@ object Main {
 
         println("\n[GT] Executing:\n")
         for ((n, rL) <- projected) {
-            val Y = toSystem(translated(n), projected(n))
+            val Y = toSystem(n, translated(n), projected(n))
             println(Y)
+            Y.run
         }
     }
 
-    private def toSystem(G: GType, rL: Map[Role, LType]): LSystem =
-        val c = G.getCommitting()
-        val com = G.getRoleCommitting
-        println(s"com: $c\nrcom: $com")
-        val ps = rL.map((r, L) => r -> Participant(r, com(r), L, EMPTY_SIGMA))
+    private def toSystem(n: GProtoName, G: GType, rL: Map[Role, LType]): LSystem =
+        val R = G.getLiveRoles
+        //val com = G.getCommitting
+        val rcom = G.getRoleCommitting
+        println(s"$n:\nCommitting: $rcom")
+        val ps = rL.map((r, L) => r -> Participant(r, rcom(r), L, Sigma(R) - r))
         LSystem(ps)
 
     def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
