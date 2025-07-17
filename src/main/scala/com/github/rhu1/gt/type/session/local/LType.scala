@@ -26,6 +26,8 @@ trait LType extends SType {
     // Sigma is local (in) queue -- send queue managed by System.step
     def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)]
+
+    def isEnded: Boolean
 }
 
 object LType {
@@ -83,6 +85,8 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
             case _ => Left(err)
         }
 
+    override def isEnded: Boolean = false
+
     /* ... */
 
     override def toString: String =
@@ -124,6 +128,8 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
             case _ => Left(err)
         }
 
+    override def isEnded: Boolean = false
+
     /* ... */
 
     override def toString: String =
@@ -154,6 +160,8 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
                 Right((pi, LActiveMixed(this.id, this.left, this.obs, this.right), q))
             case _ => Left(err)
         }
+
+    override def isEnded: Boolean = false
 
     /* ... */
 
@@ -225,6 +233,8 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
             case _ => Left(err)
         }
 
+    override def isEnded: Boolean = false
+
     /* ... */
 
     override def toString: String =
@@ -255,6 +265,8 @@ case class LActiveLeft(id: Mid, left: LType) extends LType {
             (pi1, _L1, q1) = left
         } yield (pi1, LActiveLeft(this.id, _L1), q1)
 
+    override def isEnded: Boolean = this.left.isEnded
+
     /* ... */
 
     override def toString: String =
@@ -283,6 +295,8 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
             right <- this.right.step(com, pi :+ pR, a, q)
             (pi1, _L1, q1) = right
         } yield (pi1, LActiveRight(this.id, _L1), q1)
+
+    override def isEnded: Boolean = this.right.isEnded
 
     /* ... */
 
@@ -314,6 +328,8 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] = unfold.step(com, pi, a, q)
 
+    override def isEnded: Boolean = false
+
     /* ... */
 
     override def toString: String = s"rec ${this.rvar} . ${this.body}"
@@ -337,6 +353,8 @@ case class LRecVar(rvar: RecVar) extends LType {
             Either[String, (Path, LType, Sigma)] =
         Left(s"Cannot step $a in: ($pi, $this, $q)")
 
+    override def isEnded: Boolean = false
+
     /* ... */
 
     override def toString: String = rvar.toString
@@ -357,6 +375,8 @@ object LEnd extends LType {
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)] =
         Left(s"Cannot step $a in: ($pi, $this, $q)")
+
+    override def isEnded: Boolean = true
 
     /* ... */
 

@@ -89,6 +89,8 @@ object Sigma {
 
 implicit class SigmaOps[A <: Sigma](a: A) {
 
+    def hasNoMessages: Boolean = a.values.forall(_.isEmpty)
+
     def circ(b: A): Option[Sigma] =
         if (a.keySet == b.keySet) {
             Some(a.map((r, ms) => (r, ms ++ b(r))))
@@ -137,6 +139,8 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
             Participant(this.r, this.com, L, this.q.gc(this.L)),
             s"Cannot gc $a in: $this"
         )
+
+    def isSafeTermination: Boolean = this.L.isEnded && this.q.hasNoMessages
 }
 
 case class LSystem(ps: Map[Role, Participant]) {
@@ -146,7 +150,7 @@ case class LSystem(ps: Map[Role, Participant]) {
         this.ps.map((r, p) => (r, p.getActions))
                .filter((r, as) => as.nonEmpty)
 
-    def step(a: YAction): Either[String, LSystem] = a match {
+    def step(a: YAction): Either[String, (LSystem, Path)] = a match {
         case LSend(src, dst, op, pay) =>
             val err = s"Cannot step $a in: $this"
             for {
@@ -156,13 +160,15 @@ case class LSystem(ps: Map[Role, Participant]) {
                 pd <- this.ps.get(dst).toRight(err)
                 qs <- pd.q.get(src).map(_.appended(Msg(op, pay, pi))).toRight(err)
                 pd1 = Participant(dst, pd.com, pd.L, pd.q + (src -> qs))
-            } yield LSystem(this.ps + (src -> ps1) + (dst -> pd1))
+            } yield (LSystem(this.ps + (src -> ps1) + (dst -> pd1)), pi)
         case _ =>  // Other LActions and LRho
             for {
                 p <- this.ps.get(a.subj).toRight(s"Cannot step $a in: $this")
                 p1 <- p.step(a)
-            } yield LSystem(this.ps + (a.subj -> p1._2))
+            } yield (LSystem(this.ps + (a.subj -> p1._2)), p1._1)
     }
+
+    def isSafeTermination: Boolean = this.ps.values.forall(_.isSafeTermination)
 
     def run(): Unit = LSystem.run(this)
 
@@ -188,15 +194,22 @@ object LSystem {
             }
         }
         // Pre: Y in hist.keySet
-        def addTodo(top: String, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
+        def addTodo(top: String, pi: Path, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
             val h = hist(Y)
-            if (h._2.size > 12) {
-                println(s"$top\tPruning ${h._1} at ${h._2} ...")
+            if (ras.isEmpty) {
+                if (!Y.isSafeTermination) {
+                    throw new RuntimeException(s"Stuck: $pi: $Y")
+                }
+                println(s"$top\t${h._1} terminated.")
+            /*else if (h._2.size > 12) {
+                println(s"$top\tPruning ${h._1} at ${h._2} ...")*/
+            } else if (pi.size > 3) {
+                println(s"$top\tPruning ${h._1} at ${pi} ...")
             } else {
                 for (r, as) <- ras; a <- as do // as nonEmpty
                     val s = (Y, (r, a)) // r == a.subj, redundant
                     if (done.contains(s)) {
-                        println(s"$top\t${hist(s._1)._1}, $a done.")
+                        println(s"$top\t${hist(s._1)._1}, $a already done.")
                     } else {
                         todo += s
                     }
@@ -205,7 +218,7 @@ object LSystem {
 
         hist(Y) = (nextN, List.empty)
         val ras = Y.getActions
-        addTodo("", Y, ras)
+        addTodo("", EPSILON, Y, ras)
         println(s"$Y\n\tactions=$ras\n---")
 
         def todoStr = todo.map(x => "(" + hist(x._1)._1.toString + ", " + x._2._2 + ")").mkString("; ")
@@ -219,14 +232,14 @@ object LSystem {
             val ind = "    " * trace.size
             println(indent(ind, ind, s"$i: $_Y1"))
             print(indent(ind, ind, s"\t$trace |- $a1"))
-            val succ = _Y1.step(a1) match {
+            val (succ, pi) = _Y1.step(a1) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
             val ras1 = succ.getActions
             addHist(_Y1, a1, succ)
             println(indent("", ind, s" -> ${hist(succ)._1} $succ\n\tactions=$ras1"))  // Assumes addHist
-            addTodo(ind, succ, ras1)
+            addTodo(ind, pi, succ, ras1)
             n += 1
         }
         println(s"Ran ${nextN-1} states.")
