@@ -14,12 +14,13 @@ trait LType extends SType {
 
     //def unfoldAllImmediate: LType = this
 
-    def unfoldAllOncePrefix: LType = unfoldAllOncePrefixAux(Set())
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType
+    /*def unfoldAllOncePrefix: LType = unfoldAllOncePrefixAux(Set())
+    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType*/
 
     // Pre: q.keySet contains all relevant roles
     def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
-        unfoldAllOncePrefix |> (_.getActionsAux(subj, pi, q))
+        //unfoldAllOncePrefix |> (_.getActionsAux(subj, pi, q))
+        getActionsAux(subj, pi, q)
     protected[local] def getActionsAux(subj: Role, pi: Path, q: Sigma): Set[LAction]
 
     // Sigma is local (in) queue -- send queue managed by System.step
@@ -63,8 +64,8 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
     override def subs(x: Map[RecVar, LType]): LSelect =
         LSelect(this.dst, this.cases.map((k, v) => (k, v.subs(x))))
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LSelect(this.dst, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LSelect(this.dst, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))*/
 
     /* ... */
 
@@ -92,11 +93,11 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LBranch =
+    override def subs(x: Map[RecVar, LType]): LBranch =
         LBranch(this.src, this.cases.map((k, v) => (k, v.subs(x))))
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LBranch(this.src, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LBranch(this.src, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))*/
 
     /* ... */
 
@@ -134,11 +135,11 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LMixed =
+    override def subs(x: Map[RecVar, LType]): LMixed =
         LMixed(this.id, this.left.subs(x), this.obs, this.right.subs(x))
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -165,11 +166,11 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LActiveMixed =
+    override def subs(x: Map[RecVar, LType]): LActiveMixed =
         LActiveMixed(this.id, this.left.subs(x), this.obs, this.right.subs(x))
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LActiveMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LActiveMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -235,11 +236,11 @@ case class LActiveLeft(id: Mid, left: LType) extends LType {
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LActiveLeft =
+    override def subs(x: Map[RecVar, LType]): LActiveLeft =
         LActiveLeft(this.id, this.left.subs(x))
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LActiveLeft(this.id, this.left.unfoldAllOncePrefixAux(done))
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LActiveLeft(this.id, this.left.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -264,11 +265,11 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
 
     /* ... */
 
-    def subs(x: Map[RecVar, LType]): LActiveRight =
+    override def subs(x: Map[RecVar, LType]): LActiveRight =
         LActiveRight(this.id, this.right.subs(x))
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LActiveRight(this.id, this.right.unfoldAllOncePrefixAux(done))
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        LActiveRight(this.id, this.right.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -298,12 +299,12 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
 
     override def unfold: LType = this.body.subs(Map(this.rvar -> this))
 
-    override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
         if (done.contains(this.rvar)) {
             LEnd
         } else {
             unfold |> (_.unfoldAllOncePrefixAux(done + this.rvar))
-        }
+        }*/
 
     /* ... */
 
@@ -324,8 +325,8 @@ case class LRecVar(rvar: RecVar) extends LType {
 
     override def subs(x: Map[RecVar, LType]): LType = x.getOrElse(this.rvar, this)
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        throw new RuntimeException(s"Shouldn't get here: $this")
+    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
+        throw new RuntimeException(s"Shouldn't get here: $this")*/
 
     /* ... */
 
@@ -347,7 +348,7 @@ object LEnd extends LType {
 
     override def subs(x: Map[RecVar, LType]): LEnd.type = this
 
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LEnd.type = this
+    //override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LEnd.type = this
 
     /* ... */
 

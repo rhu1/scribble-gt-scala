@@ -208,9 +208,9 @@ object LSystem {
         addTodo("", Y, ras)
         println(s"$Y\n\tactions=$ras\n---")
 
-        def todoString = todo.map(x => "(" + hist(x._1)._1.toString + ", " + x._2._2 + ")").mkString("; ")
+        def todoStr = todo.map(x => "(" + hist(x._1)._1.toString + ", " + x._2._2 + ")").mkString("; ")
         while (todo.nonEmpty) {
-            println(s"todo: $todoString")
+            println(s"todo: $todoStr")
             val pop = todo.last
             todo -= pop
             done += pop
@@ -229,6 +229,7 @@ object LSystem {
             addTodo(ind, succ, ras1)
             n += 1
         }
+        println(s"Ran ${nextN-1} states.")
     }
 
 }
