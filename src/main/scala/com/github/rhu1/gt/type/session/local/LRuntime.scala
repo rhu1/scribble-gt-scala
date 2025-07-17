@@ -174,39 +174,39 @@ case class LSystem(ps: Map[Role, Participant]) {
 object LSystem {
 
     def run(s: LSystem): Unit = {
-        var i = 0
-        var s1 = s
         val done = collection.mutable.LinkedHashSet[(LSystem, (Role, YAction))]()
         val todo = collection.mutable.LinkedHashSet[(LSystem, (Role, YAction))]()
-        //ras.foreach((r, as) => as.foreach())
-        val ras = s1.getActions
-        for (r, as) <- ras; a <- as do  // as nonEmpty
-            val state = (s, (r, a))  // r == a.subj, redundant
-            if (!done.contains(state)) {
-                todo += state
-            }
-        println(s"$s1\n\tactions=$ras\n---")
+        def addTodo(s: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
+            //val ras = s1.getActions
+            for (r, as) <- ras; a <- as do // as nonEmpty
+                val state = (s, (r, a)) // r == a.subj, redundant
+                if (done.contains(state)) {
+                    println(s"\t$a done")
+                } else {
+                    todo += state
+                }
+        }
+
+        val ras = s.getActions
+        addTodo(s, ras)
+        println(s"$s\n\tactions=$ras\n---")
+
+        var i = 0
+        def nexti: Int = { i += 1; i }
         while (todo.nonEmpty) {
-            //println(s"\tactions=${todo.map(_._2)}\n---")
             val pop = todo.last
             todo -= pop
             done += pop
             val (s2, (_, a)) = pop  // r == a.subj, redundant
             println(s"$s2")
             print(s"$i: - $a")
-            s1 = s2.step(a) match {
+            val s1 = s2.step(a) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
             val ras1 = s1.getActions
             println(s" -> $s1\n\tactions=$ras1")
-            for (r1, as1) <- ras1; a1 <- as1 do
-                val state = (s1, (r1, a1))  // r == a.subj, redundant
-                if (done.contains(state)) {
-                    println(s"\t$a1 done")
-                } else {
-                    todo += state
-                }
+            addTodo(s1, ras1)
             i += 1
         }
     }
