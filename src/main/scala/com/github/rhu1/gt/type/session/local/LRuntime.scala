@@ -116,9 +116,10 @@ val EPSILON: Path = List.empty[pLR]
 
 case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 
-    // Includes LRho when not a "skip"
+    // Only includes LRho when not a "skip"
     def getActions: Set[YAction] =
-        val gc: Set[YAction] = if (this.q.containsStale(this.L)) Set(LRho(this.r)) else Set.empty[YAction]
+        val gc: Set[YAction] =
+            if (this.q.containsStale(this.L)) Set(LRho(this.r)) else Set.empty[YAction]
         gc ++ this.L.getActions(this.r, EPSILON, q)  // cf. union
 
     def step(a: YAction): Either[String, (Path, Participant)] = a match {
@@ -128,13 +129,13 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 
     // Actual message communicated (if any) is LAction[Msg] version of (a, pi)
     private def stepPi(a: LAction): Either[String, (Path, Participant)] =
-        this.L.step(com, EPSILON, a, this.q).map((pi, L1, q1) =>
-            (pi, Participant(this.r, this.com, L1, q1)))
+        this.L.step(com, EPSILON, a, this.q).map(
+            (pi, L1, q1) => (pi, Participant(this.r, this.com, L1, q1)))
 
     def gc(a: LRho): Either[String, Participant] =
-        Either.cond(a.subj != this.r,
+        Either.cond(a.subj == this.r,
             Participant(this.r, this.com, L, this.q.gc(this.L)),
-            s"Cannot step $a in: $this"
+            s"Cannot gc $a in: $this"
         )
 }
 
@@ -175,19 +176,38 @@ object LSystem {
     def run(s: LSystem): Unit = {
         var i = 0
         var s1 = s
-        var ras = s1.getActions  // as nonEmpty
-        println(s"$s1\n\tactions=$ras")
-        while (ras.nonEmpty) {
-            val (r, as) = ras.head
-            val a = as.head
+        val done = collection.mutable.LinkedHashSet[(LSystem, (Role, YAction))]()
+        val todo = collection.mutable.LinkedHashSet[(LSystem, (Role, YAction))]()
+        //ras.foreach((r, as) => as.foreach())
+        val ras = s1.getActions
+        for (r, as) <- ras; a <- as do  // as nonEmpty
+            val state = (s, (r, a))  // r == a.subj, redundant
+            if (!done.contains(state)) {
+                todo += state
+            }
+        println(s"$s1\n\tactions=$ras\n---")
+        while (todo.nonEmpty) {
+            //println(s"\tactions=${todo.map(_._2)}\n---")
+            val pop = todo.last
+            todo -= pop
+            done += pop
+            val (s2, (_, a)) = pop  // r == a.subj, redundant
+            println(s"$s2")
             print(s"$i: - $a")
-            s1 = s1.step(a) match {
+            s1 = s2.step(a) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
-            ras = s1.getActions
+            val ras1 = s1.getActions
+            println(s" -> $s1\n\tactions=$ras1")
+            for (r1, as1) <- ras1; a1 <- as1 do
+                val state = (s1, (r1, a1))  // r == a.subj, redundant
+                if (done.contains(state)) {
+                    println(s"\t$a1 done")
+                } else {
+                    todo += state
+                }
             i += 1
-            println(s" -> $s1\n\tactions=$ras")
         }
     }
 

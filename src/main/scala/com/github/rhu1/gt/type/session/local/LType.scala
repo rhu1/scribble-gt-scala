@@ -160,6 +160,7 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
     /* ... */
 
     override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
+        // !!! includes context rule \nu's
         val left = this.left.getActions(subj, pi :+ pL, q)
         val right = this.right.getActions(subj, pi :+ pR, q)
         if ((left intersect right).nonEmpty) {
@@ -194,6 +195,16 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
                         }
                     case (Left(_), Right(pi1, l1, q1)) =>  // RRcv -- subj == src == this.obs
                         Right((pi1, LActiveRight(this.id, l1), q1))
+                    case _ => Left(err)
+                }
+            case LNu(subj, c) =>  // !!!
+                val left = this.left.step(com, pi :+ pL, a, q)
+                val right = this.right.step(com, pi :+ pR, a, q)
+                (left, right) match {
+                    case (Right(pi1, l1, q1), Left(_)) =>
+                        Right((pi1, LActiveMixed(this.id, l1, this.obs, this.right), q1))
+                    case (Left(_), Right(pi1, l1, q1)) => Left(err)
+                        Right((pi1, LActiveMixed(this.id, this.left, this.obs, l1), q1))
                     case _ => Left(err)
                 }
             case _ => Left(err)
@@ -290,7 +301,8 @@ case class LRecVar(rvar: RecVar) extends LType {
         throw new RuntimeException(s"Shouldn't get here: $this")
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
-        Either[String, (Path, LType, Sigma)] = Left(s"Cannot step $a in: $this")
+            Either[String, (Path, LType, Sigma)] =
+        Left(s"Cannot step $a in: ($pi, $this, $q)")
 
     /* ... */
 
@@ -308,7 +320,8 @@ object LEnd extends LType {
     override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] = Set()
 
     override def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
-            Either[String, (Path, LType, Sigma)] = Left(s"Cannot step $a in: $this")
+            Either[String, (Path, LType, Sigma)] =
+        Left(s"Cannot step $a in: ($pi, $this, $q)")
 
     /* ... */
 
