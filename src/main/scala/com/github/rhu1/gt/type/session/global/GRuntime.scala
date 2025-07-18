@@ -5,7 +5,7 @@ import com.github.rhu1.gt.`type`.session.*
 
 /* ... */
 
-sealed trait GAction { }
+sealed trait GAction extends SAction { }
 
 sealed abstract class GIO extends GAction {
     val src: Role

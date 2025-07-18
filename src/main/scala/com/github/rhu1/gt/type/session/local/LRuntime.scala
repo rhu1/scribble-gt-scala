@@ -133,9 +133,11 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction] {
 
     // Post: Set[YAction] nonEmpty
-    override def getActions: Map[Role, Set[YAction]] =
+    def getRoleActions: Map[Role, Set[YAction]] =
         this.ps.map((r, p) => (r, p.getActions))
                .filter((r, as) => as.nonEmpty)
+        
+    override def getActions: Set[YAction] = getRoleActions.flatMap(_._2).toSet
 
     def step(a: YAction): Either[String, LSystem] = stepPi(a).map(_._1)
 

@@ -125,7 +125,8 @@ case class GWiggly(
                 case _ => false
             }
 
-    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = a match {
+    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
+            Either[String, GType] = a match {
         case GRecv(src, dst, op, pay) =>
             if (dst == this.dst) {
                 if (src != this.src || dst != this.dst || op != this.op) {
@@ -142,11 +143,15 @@ case class GWiggly(
         case _ => stepNested(com, a)
     }
 
-    protected def stepNested(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] =
+    protected def stepNested(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
+            Either[String, GType] =
         this.cont.head._2.step(com, a)
 
-    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)] =
-        step(com, a).map(G => (pi, G))
+    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
+            Either[String, (GType, Path)] =
+        step(com, a).map(G => (G, pi))
+
+    override def isSafeTermination(all: Set[Role]): Boolean = true
 
     /* ... */
 
@@ -180,7 +185,8 @@ class GActiveMixed(
     /* ... */
 
     override def subs(x: Map[RecVar, GType]): GActiveMixed =
-        GActiveMixed(this.id, this.left.subs(x), this.other, this.obs, this.comL, this.comR, this.right.subs(x))
+        GActiveMixed(this.id, this.left.subs(x), this.other, this.obs,
+            this.comL, this.comR, this.right.subs(x))
 
     override def unfoldAllOnceAux(done: Set[RecVar]): GActiveMixed =
         GActiveMixed(id, this.left.unfoldAllOnceAux(done), this.other, this.obs,
@@ -232,11 +238,12 @@ class GActiveMixed(
         })
         left union right
 
-    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GActiveMixed] =
-        stepPi(com, EPSILON, a).map((_, G) => G)
+    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
+            Either[String, GActiveMixed] =
+        stepPi(com, EPSILON, a).map((G, _) => G)
 
-    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction):
-            Either[String, (Path, GActiveMixed)] =
+    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
+            Either[String, (GActiveMixed, Path)] =
         val R = getLiveRoles
         val left = this.left.step(com, a)
         val right = this.right.step(com, a)
@@ -254,8 +261,10 @@ class GActiveMixed(
                         if (comR.contains(dst)) {
                             Left(s"Cannot step $a in: $this")
                         } else {
-                            // then LRcv2 else LRcv1
-                            val comL1 = if (com(this.id).contains(op)) this.comL else this.comL + dst
+                            // ... then LRcv2 else LRcv1
+                            val comL1 =
+                                if (com(dst)(this.id).contains(op)) this.comL
+                                else this.comL + dst
                             Right(GActiveMixed(this.id, x, this.other,
                                 this.obs, comL1, this.comR, this.right))
                         }
@@ -267,7 +276,7 @@ class GActiveMixed(
                                 this.comL, this.comR, this.right))
                         }
                 }
-                res.map(x => (pi :+ pL, x))
+                res.map(x => (x, pi :+ pL))
             case (Left(_), Right(x)) =>
                 val res = a match {
                     case GSend(src, _, _, _) =>
@@ -294,10 +303,18 @@ class GActiveMixed(
                                 this.obs, this.comL, this.comR, x))
                         }
                 }
-                res.map(x => (pi :+ pR, x))
+                res.map(x => (x, pi :+ pR))
             case _ => Left(s"Cannot step $a in: $this")
         }
 
+    override def isSafeTermination(all: Set[Role]): Boolean =
+        if (this.comL == all) {
+            this.left.isSafeTermination(all)
+        } else if (this.comR == all) {
+            this.right.isSafeTermination(all)
+        } else {
+            false
+        }
 
     /* ... */
 
@@ -305,3 +322,21 @@ class GActiveMixed(
         s"[${this.left} $comL ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.other},${this.obs} $comR ${this.right}]"
 }
 
+
+/* ... */
+
+// Root committing with current top-level G
+// Pre: rcom.keySet == root getLiveRoles
+case class GSystem(rcom: Map[Role, Map[Mid, Set[Op]]], G: GType)
+    extends SSystem[GSystem, GAction] {
+
+    override def getActions: Set[GAction] = this.G.getActions
+
+    override def stepPi(a: GAction): Either[String, (GSystem, Path)] =
+        this.G.stepPi(this.rcom, EPSILON, a)
+            .map((G, pi) => (GSystem(this.rcom, G), pi))
+
+    override def isSafeTermination: Boolean = this.G.isSafeTermination(rcom.keySet)
+
+    override def run(): Unit = SSystem.run(this)
+}

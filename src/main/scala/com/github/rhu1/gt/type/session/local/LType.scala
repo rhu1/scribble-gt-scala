@@ -227,7 +227,6 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
                         Right((pi1, LActiveMixed(this.id, this.left, this.obs, l1), q1))
                     case _ => Left(err)
                 }
-            case _ => Left(err)
         }
 
     override def isEnded: Boolean = false

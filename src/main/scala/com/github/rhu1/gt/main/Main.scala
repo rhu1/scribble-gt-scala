@@ -2,7 +2,7 @@ package com.github.rhu1.gt.main
 
 import com.github.rhu1.gt.*
 import com.github.rhu1.gt.`type`.session.*
-import com.github.rhu1.gt.`type`.session.global.{GType, Scrib2GT}
+import com.github.rhu1.gt.`type`.session.global.{GSystem, GType, Scrib2GT}
 import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
@@ -51,6 +51,12 @@ object Main {
             }
         })
 
+        println("\n[GT] Executing global:\n")
+        for ((n, _G) <- translated) {
+            val Gsys = GSystem(_G.getRoleCommitting, _G)
+            Gsys.run()
+        }
+
         println("\n[GT] Projecting:\n")
         val projected = translated.map((n, G) => (
             n,
@@ -60,15 +66,15 @@ object Main {
         ))
         projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
 
-        println("\n[GT] Executing:\n")
+        println("\n[GT] Executing local:\n")
         for ((n, rL) <- projected) {
-            val Y = toSystem(n, translated(n), projected(n))
+            val Y = toLSystem(n, translated(n), projected(n))
             //println(Y)
             Y.run()
         }
     }
 
-    private def toSystem(n: GProtoName, G: GType, rL: Map[Role, LType]): LSystem =
+    private def toLSystem(n: GProtoName, G: GType, rL: Map[Role, LType]): LSystem =
         val R = G.getLiveRoles
         //val com = G.getCommitting
         val rcom = G.getRoleCommitting
