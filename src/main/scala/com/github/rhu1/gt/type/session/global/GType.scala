@@ -94,6 +94,8 @@ trait GType extends SType {
 
     def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType]
 
+    // pi doesn't affect step -- only for debugging (and extra correspondence checking)
+    def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)]
 
     // Post: keySet == getLiveRoles
     def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
@@ -315,6 +317,8 @@ case class GInteraction(
                  }
     } yield GInteraction(this.src, this.dst, q)
 
+    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)] =
+        step(com, a).map(G => (pi, G))
 
     /* ... */
 
@@ -452,6 +456,9 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
         case _ => Left(s"Cannot step $a in: $this")
     }
 
+    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)] =
+        step(com, a).map(G => (pi, G))
+
     /* ... */
 
     override def toString: String =
@@ -533,6 +540,9 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
     override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] =
         unfold |> (_.step(com, a))
 
+    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)] =
+        step(com, a).map(G => (pi, G))
+
     /* ... */
 
     override def toString: String = s"rec ${this.rvar} . ${this.body}"
@@ -582,7 +592,10 @@ case class GRecVar(rvar: RecVar) extends GType {
     override def getActions: Set[GAction] = Set()
 
     override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] =
-        Left("Stuck: $this")
+        Left(s"Shouldn't get here: $this")
+        
+    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)] =
+        Left(s"Shouldn't get here: $this")
 
     /* ... */
 
@@ -608,9 +621,11 @@ object GEnd extends GType {
 
     /* ... */
 
-    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
+    override def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = 
+        Map.empty
 
-    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] = Map()
+    override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
+        Map.empty
 
     override def getSyntacticStrictDeps: Map[Role, Set[Role]] = Map()
 
@@ -631,7 +646,11 @@ object GEnd extends GType {
 
     override def getActions: Set[GAction] = Set()
 
-    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = Left("Stuck: $this")
+    override def step(com: Map[Mid, Set[Op]], a: GAction): Either[String, GType] = 
+        Left(s"Stuck: $this")
+
+    override def stepPi(com: Map[Mid, Set[Op]], pi: Path, a: GAction): Either[String, (Path, GType)] =
+        Left(s"Stuck: $this")
 
     /* ... */
 

@@ -184,7 +184,7 @@ object LSystem {
         def nextN: Int = { n += 1; n }
         def indent(top: String, par: String, x: String) = top + x.replaceAll("\\n", s"\n$par")
 
-        val hist = collection.mutable.Map.empty[LSystem, (Integer, List[YAction])]
+        val hist = collection.mutable.Map.empty[LSystem, (Integer, List[YAction])]  // List is (first) trace
         val done = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
         val todo = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
         // Pre: ras = _Y1.getActions -- split for debugging
@@ -194,7 +194,7 @@ object LSystem {
             }
         }
         // Pre: Y in hist.keySet
-        def addTodo(top: String, pi: Path, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
+        def checkAndAddTodo(top: String, pi: Path, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
             val h = hist(Y)
             if (ras.isEmpty) {
                 if (!Y.isSafeTermination) {
@@ -220,7 +220,7 @@ object LSystem {
 
         hist(Y) = (nextN, List.empty)
         val ras = Y.getActions
-        addTodo("", EPSILON, Y, ras)
+        checkAndAddTodo("", EPSILON, Y, ras)
         println(s"$Y\n\tactions=$ras\n---")
 
         def todoStr = todo.map(x => "(" + hist(x._1)._1.toString + ", " + x._2._2 + ")").mkString("; ")
@@ -241,7 +241,7 @@ object LSystem {
             val ras1 = succ.getActions
             addHist(_Y1, a1, succ)
             println(indent("", ind, s" -> ${hist(succ)._1} $succ\n\tactions=$ras1"))  // Assumes addHist
-            addTodo(ind, pi, succ, ras1)
+            checkAndAddTodo(ind, pi, succ, ras1)
             n += 1
         }
         println(s"Ran ${nextN-1} states.")
