@@ -21,7 +21,7 @@ global protocol Proto1(role A, role B, role C) {
 }
 //*/
 
-/*
+//*
 global protocol Proto1(role A, role B, role C) {
     1() from A to B;
     2() from A to C;  // Testing step interleavings
@@ -67,7 +67,7 @@ global protocol Proto1(role A, role B) {
 }
 //*/
 
-//* // Testing step
+/* // Testing step
 global protocol Proto1(role A, role B) {
     rec X {
         mixed {

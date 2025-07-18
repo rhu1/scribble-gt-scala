@@ -143,14 +143,16 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
     def isSafeTermination: Boolean = this.L.isEnded && this.q.hasNoMessages
 }
 
-case class LSystem(ps: Map[Role, Participant]) {
+case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem] {
 
     // Post: Set[YAction] nonEmpty
-    def getActions: Map[Role, Set[YAction]] =
+    override def getActions: Map[Role, Set[YAction]] =
         this.ps.map((r, p) => (r, p.getActions))
                .filter((r, as) => as.nonEmpty)
 
-    def step(a: YAction): Either[String, (LSystem, Path)] = a match {
+    def step(a: YAction): Either[String, LSystem] = stepPi(a).map(_._1)
+
+    override def stepPi(a: YAction): Either[String, (LSystem, Path)] = a match {
         case LSend(src, dst, op, pay) =>
             val err = s"Cannot step $a in: $this"
             for {
@@ -168,33 +170,43 @@ case class LSystem(ps: Map[Role, Participant]) {
             } yield (LSystem(this.ps + (a.subj -> p1._2)), p1._1)
     }
 
-    def isSafeTermination: Boolean = this.ps.values.forall(_.isSafeTermination)
+    override def isSafeTermination: Boolean = this.ps.values.forall(_.isSafeTermination)
 
-    def run(): Unit = LSystem.run(this)
+    override def run(): Unit = SSystem.run[LSystem](this)
 
     override def toString: String =
         val ps = this.ps.mkString("\n\t")
         s"LSystem(\n\t$ps)"
 }
 
-object LSystem {
+trait SSystem[+T <: SSystem[T]] {
+    def getActions: Map[Role, Set[YAction]]
 
-    def run(Y: LSystem): Unit = {
+    def stepPi(a: YAction): Either[String, (T, Path)]
+
+    def isSafeTermination: Boolean
+
+    def run(): Unit
+}
+
+object SSystem {
+
+    def run[T <: SSystem[T]](Y: T): Unit = {
         var n = 0
         def nextN: Int = { n += 1; n }
         def indent(top: String, par: String, x: String) = top + x.replaceAll("\\n", s"\n$par")
 
-        val hist = collection.mutable.Map.empty[LSystem, (Integer, List[YAction])]  // List is (first) trace
-        val done = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
-        val todo = collection.mutable.LinkedHashSet.empty[(LSystem, (Role, YAction))]
+        val hist = collection.mutable.Map.empty[T, (Integer, List[YAction])]  // List is (first) trace
+        val done = collection.mutable.LinkedHashSet.empty[(T, (Role, YAction))]
+        val todo = collection.mutable.LinkedHashSet.empty[(T, (Role, YAction))]
         // Pre: ras = _Y1.getActions -- split for debugging
-        def addHist(Y: LSystem, a: YAction, Y1: LSystem): Unit = {
+        def addHist(Y: T, a: YAction, Y1: T): Unit = {
             if (!hist.contains(Y1)) {
                 hist += (Y1 -> (nextN, hist(Y)._2 :+ a))
             }
         }
         // Pre: Y in hist.keySet
-        def checkAndAddTodo(top: String, pi: Path, Y: LSystem, ras: Map[Role, Set[YAction]]): Unit = {
+        def checkAndAddTodo(top: String, pi: Path, Y: T, ras: Map[Role, Set[YAction]]): Unit = {
             val h = hist(Y)
             if (ras.isEmpty) {
                 if (!Y.isSafeTermination) {
@@ -234,7 +246,7 @@ object LSystem {
             val ind = "    " * trace.size
             println(indent(ind, ind, s"$i: $_Y1"))
             print(indent(ind, ind, s"\t$trace |- $a1"))
-            val (succ, pi) = _Y1.step(a1) match {
+            val (succ, pi) = _Y1.stepPi(a1) match {
                 case Left(x) => throw new RuntimeException(x)
                 case Right(x) => x
             }
