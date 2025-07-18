@@ -13,6 +13,7 @@ object ConsoleColours {
     val EPSILON = "\u03B5"
     val SUPER_PLUS = '\u207A'
     val EM_DASH = '\u2014'
+    val WAVE_ARROW = '\u219D'
 
     /*def outPrintln(x: String): Unit = {
         x = x.replaceAll("\\033\\[0m", ConsoleColors.stack.peek)

@@ -46,7 +46,7 @@ case class GWiggly(
            cases: ListMap[(Op, Payload), GType]
        ) extends GRuntimeType {
 
-    private val cont: ListMap[(Op, Payload), GType] = this.cases.filter(_._1 == this.op)
+    private val cont: ListMap[(Op, Payload), GType] = this.cases.filter(_._1._1 == this.op)
 
     /* ... */
 
@@ -131,7 +131,7 @@ case class GWiggly(
             if (dst == this.dst) {
                 if (src != this.src || dst != this.dst || op != this.op) {
                     Left(s"Cannot step $a in: $this")
-                } else {
+                } else {  // Rcv
                     this.cont.find((k, _) => k == (op, pay)) match {   // ...only checking pay
                         case None => Left(s"Cannot step $a in: $this")
                         case Some((_, x)) => Right(x)
@@ -145,7 +145,9 @@ case class GWiggly(
 
     protected def stepNested(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
             Either[String, GType] =
-        this.cont.head._2.step(com, a)
+        //if (q == a.subj)  // HERE TODO
+        val h = this.cont.head
+        h._2.step(com, a).map(x => GWiggly(this.src, this.dst, this.op, this.cases + (h._1 -> x)))
 
     override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
             Either[String, (GType, Path)] =
@@ -166,7 +168,7 @@ case class GWiggly(
         }
 
     override def toString: String =
-        s"${this.src} ${ConsoleColours.RIGHT_ARROW} ${this.dst} $this.op ${casesToString}"
+        s"${this.src} ${ConsoleColours.WAVE_ARROW} ${this.dst} ${this.op} ${casesToString}"
 }
 
 

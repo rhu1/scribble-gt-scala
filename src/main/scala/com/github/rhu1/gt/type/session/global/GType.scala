@@ -7,7 +7,7 @@ import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 import scala.collection.immutable.ListMap
 
 
-trait GType extends SType  {
+trait GType extends SType {
 
     /* ... */
 
@@ -301,9 +301,10 @@ case class GInteraction(
                     if (src != this.src || dst != this.dst) {
                         Left(s"Cannot step $a in: $this")
                     } else {
-                        this.cases.find((k, v) => k == (op, pay)) match {
+                        this.cases.find((k, _) => k == (op, pay)) match {
                             case None => Left(s"Cannot step $a in: $this")
-                            case Some(x) => Right(x._2)
+                            case Some(((op, _), _)) =>  // Snd
+                                Right(GWiggly(this.src, this.dst, op, this.cases))
                         }
                     }
                 } else {
@@ -313,14 +314,15 @@ case class GInteraction(
         }
 
     protected def stepNested(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
-            Either[String, GInteraction] = for {
-        q <- this.cases.foldLeft[Either[String, ListMap[(Op, Payload), GType]]]
-                 (Right(ListMap.empty[(Op, Payload), GType])) {
-                     case (acc, (m, p)) => acc match
-                         case Right(x) => p.step(com, a).map(y => x + ((m, y)))
-                         case Left(x) => Left(x)
-                 }
-    } yield GInteraction(this.src, this.dst, q)
+            Either[String, GInteraction] = 
+        for {  // Cont1  // !!! redundant?
+            cases <- this.cases.foldLeft[Either[String, ListMap[(Op, Payload), GType]]]
+                         (Right(ListMap.empty[(Op, Payload), GType])) {
+                         case (acc, (m, p)) => acc match
+                             case Right(x) => p.step(com, a).map(y => x + ((m, y)))
+                             case Left(x) => Left(x)
+                     }
+        } yield GInteraction(this.src, this.dst, cases)
 
     override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
             Either[String, (GType, Path)] =
