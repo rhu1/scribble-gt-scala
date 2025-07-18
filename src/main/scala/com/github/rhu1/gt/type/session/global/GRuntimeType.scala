@@ -145,9 +145,12 @@ case class GWiggly(
 
     protected def stepNested(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
             Either[String, GType] =
-        //if (q == a.subj)  // HERE TODO
-        val h = this.cont.head
-        h._2.step(com, a).map(x => GWiggly(this.src, this.dst, this.op, this.cases + (h._1 -> x)))
+        if (this.dst == a.subj) {
+            Left(s"Cannot step $a in: $this")
+        } else {
+            val h = this.cont.head
+            h._2.step(com, a).map(x => GWiggly(this.src, this.dst, this.op, this.cases + (h._1 -> x)))
+        }
 
     override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
             Either[String, (GType, Path)] =
@@ -263,17 +266,19 @@ class GActiveMixed(
                         if (comR.contains(dst)) {
                             Left(s"Cannot step $a in: $this")
                         } else {
-                            // ... then LRcv2 else LRcv1
                             val comL1 =
-                                if (com(dst)(this.id).contains(op)) this.comL
-                                else this.comL + dst
+                                if (com(dst)(this.id).contains(op)) {  // LRcv1
+                                    this.comL + dst
+                                } else {  // LRcv2
+                                    this.comL
+                                }
                             Right(GActiveMixed(this.id, x, this.other,
                                 this.obs, comL1, this.comR, this.right))
                         }
                     case GNu(_) =>
                         if (this.comR == R) {
                             Left(s"Cannot step $a in: $this")
-                        } else { // !!! LNu
+                        } else {  // !!! LNu
                             Right(GActiveMixed(this.id, x, this.other, this.obs,
                                 this.comL, this.comR, this.right))
                         }
@@ -286,16 +291,16 @@ class GActiveMixed(
                             Left(s"Cannot step $a in: $this")
                         } else {  // RSnd
                             val comR1 = this.comR + src
-                            Right(GActiveMixed(this.id, x, this.other,
-                                this.obs, this.comL, comR1, this.right))
+                            Right(GActiveMixed(this.id, this.left, this.other,
+                                this.obs, this.comL, comR1, x))
                         }
                     case GRecv(_, dst, op, pay) =>
                         if (comR.contains(dst)) { // !!! cf. defs
                             Left(s"Cannot step $a in: $this")
                         } else {  // RRcv
                             val comR1 = this.comR + dst
-                            Right(GActiveMixed(this.id, x, this.other, this.obs,
-                                this.comL, comR1, this.right))
+                            Right(GActiveMixed(this.id, this.left, this.other, this.obs,
+                                this.comL, comR1, x))
                         }
                     case GNu(_) =>
                         if (this.comL.nonEmpty) {
@@ -321,7 +326,7 @@ class GActiveMixed(
     /* ... */
 
     override def toString: String =
-        s"[${this.left} $comL ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.other},${this.obs} $comR ${this.right}]"
+        s"[${this.left} $comL ${ConsoleColours.BLACK_TRIANGLE}${id}_${this.other},${this.obs} $comR ${this.right}]"
 }
 
 

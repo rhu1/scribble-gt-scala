@@ -5,9 +5,7 @@ import com.github.rhu1.gt.`type`.session.*
 import scala.annotation.tailrec
 
 
-sealed trait YAction extends SAction {
-    val subj: Role
-}
+sealed trait YAction extends SAction {}
 
 case class LRho(subj: Role) extends YAction {}
 
@@ -136,7 +134,7 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     def getRoleActions: Map[Role, Set[YAction]] =
         this.ps.map((r, p) => (r, p.getActions))
                .filter((r, as) => as.nonEmpty)
-        
+
     override def getActions: Set[YAction] = getRoleActions.flatMap(_._2).toSet
 
     def step(a: YAction): Either[String, LSystem] = stepPi(a).map(_._1)

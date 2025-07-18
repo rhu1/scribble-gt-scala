@@ -59,7 +59,9 @@ val EPSILON: Path = List.empty[pLR]
 
 /* ... */
 
-trait SAction {}
+trait SAction {
+    val subj: Role
+}
 
 trait SSystem[+T <: SSystem[T, U], U <: SAction] {
     def getActions: Set[U]
