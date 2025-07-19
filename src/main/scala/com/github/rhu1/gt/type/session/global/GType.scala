@@ -90,14 +90,21 @@ trait GType extends SType {
 
     /* dynamics */
 
-    def getActions: Set[GAction] = getActionsAux(getLiveRoles)
+    def getActions: Set[GAction] = getActionsAux(EPSILON, getLiveRoles)
     
-    protected[global] def getActionsAux(rem: Set[Role]): Set[GAction]
+    protected[global] def getActionsAux(env: Path, rem: Set[Role]): Set[GAction]
 
+    // !!! pi needed for determinism, e.g., B!A:3 in [ mu X...X |> 3() from B to A ]
+    // CHECKME Post: res Path == a.path?
+    def stepPi(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, (GType, Path)]
+        = stepPiAux(com, EPSILON, a)
+
+    protected[global] def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
+            Either[String, (GType, Path)]
+
+    // deprecate?
     def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
-
-    // pi doesn't affect step -- only for debugging (and extra correspondence checking)
-    def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction): Either[String, (GType, Path)]
+        = stepPi(com, a).map((G, _) => G)
 
     // Post: keySet == getLiveRoles
     def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
@@ -285,10 +292,10 @@ case class GInteraction(
 
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] =
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] =
         val curr =
             if (rem.contains(this.src)) {
-                this.cases.keySet.map((o, d) => GSend(this.src, this.dst, o, d))
+                this.cases.keySet.map((o, d) => GSend(env, this.src, this.dst, o, d))
             } else {
                 Set.empty
             }
@@ -297,44 +304,44 @@ case class GInteraction(
             if (rem1.isEmpty) {
                 Set.empty
             } else {
-                this.cases.values.map(_.getActionsAux(rem1))
+                this.cases.values.map(_.getActionsAux(env, rem1))
                     .reduce((x, y) => x intersect y)  // !!! intersect redundant, only unary nonEmpty (no indifferent)
             }
         curr ++ nested
 
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
-        = a match {
-            case GSend(src, dst, op, pay) =>
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
+            Either[String, (GType, Path)] =
+        a match {
+            case GSend(pi, src, dst, op, pay) =>
                 if (src == this.src) {
-                    if (dst != this.dst) {
+                    if (pi != env || dst != this.dst) {
                         Left(s"Cannot step $a in: $this")
                     } else {
                         this.cases.find((k, _) => k == (op, pay)) match {
                             case None => Left(s"Cannot step $a in: $this")
                             case Some(((op, _), _)) =>  // Snd
-                                Right(GWiggly(this.src, this.dst, op, this.cases))
+                                Right((GWiggly(this.src, this.dst, op, this.cases), pi))
                         }
                     }
                 } else {
-                    stepNested(com, a)
+                    stepPiAuxNested(com, env, a)
                 }
-            case _ => stepNested(com, a)
+            case _ => stepPiAuxNested(com, env, a)
         }
 
-    protected def stepNested(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
-            Either[String, GInteraction] = 
+    protected def stepPiAuxNested(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
+            Either[String, (GInteraction, Path)] =
         for {  // Cont1  // !!! redundant?
             cases <- this.cases.foldLeft[Either[String, ListMap[(Op, Payload), GType]]]
                          (Right(ListMap.empty[(Op, Payload), GType])) {
                          case (acc, (m, p)) => acc match
-                             case Right(x) => p.step(com, a).map(y => x + ((m, y)))
+                             case Right(x) => p.stepPiAux(com, env, a).map(y => x + ((m, y._1)))
                              case Left(x) => Left(x)
                      }
-        } yield GInteraction(this.src, this.dst, cases)
+            } yield (GInteraction(this.src, this.dst, cases), a.pi)  // CHECKME a.pi vs. all y._2 (currently not check eslewhere, wiggly/activemixed)
 
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
-            Either[String, (GType, Path)] =
-        step(com, a).map(G => (G, pi))
+    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
+        stepPi(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean = false
 
@@ -462,20 +469,25 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] = Set(GNu(this.id))
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] = 
+        Set(GNu(env, this.id))
 
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GActiveMixed] = a match {
-        case GNu(c) =>
-            if (c == this.id) {
-                Right(GActiveMixed(this.id, this.left, this.other, this.obs, Set(), Set(), this.right))
-            } else{
-                Left(s"Cannot step $a in: $this")
-            }
-        case _ => Left(s"Cannot step $a in: $this")
-    }
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction): 
+            Either[String, (GType, Path)] = 
+        a match {
+            case GNu(pi, c) =>
+                if (pi == env && c == this.id) {
+                    Right(
+                        GActiveMixed(this.id, this.left, this.other, this.obs, Set(), Set(), this.right),
+                        pi)
+                } else{
+                    Left(s"Cannot step $a in: $this")
+                }
+            case _ => Left(s"Cannot step $a in: $this")
+        }
 
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction): Either[String, (GType, Path)] =
-        step(com, a).map(G => (G, pi))
+    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GActiveMixed] =
+        step(com, a).map(G => (G, pi))*/
 
     override def isSafeTermination(all: Set[Role]): Boolean = false
 
@@ -554,15 +566,15 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] =
-        unfold |> (_.getActionsAux(rem))
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] =
+        unfold |> (_.getActionsAux(env, rem))
 
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
-        unfold |> (_.step(com, a))
-
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
             Either[String, (GType, Path)] =
-        step(com, a).map(G => (G, pi))
+        unfold |> (_.stepPiAux(com, env, a))
+
+    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
+        step(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean = false
 
@@ -612,13 +624,15 @@ case class GRecVar(rvar: RecVar) extends GType {
         
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] = Set()
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] =
+        throw new RuntimeException(s"Shouldn't get here $this")
 
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction): 
+            Either[String, (GType, Path)] =
         Left(s"Shouldn't get here: $this")
 
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction): Either[String, (GType, Path)] =
-        Left(s"Shouldn't get here: $this")
+    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
+        Left(s"Shouldn't get here: $this")*/
 
     override def isSafeTermination(all: Set[Role]): Boolean =
         throw new RuntimeException(s"Shouldn't get here: $this")
@@ -670,12 +684,13 @@ object GEnd extends GType {
         
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] = Set()
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] = Set.empty
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
         Left(s"Stuck: $this")
 
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction): Either[String, (GType, Path)] =
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction): 
+            Either[String, (GType, Path)] =
         Left(s"Stuck: $this")
 
     override def isSafeTermination(all: Set[Role]): Boolean = true

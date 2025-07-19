@@ -117,48 +117,49 @@ case class GWiggly(
 
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] =
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] =
         val cont = this.cont.head
         val curr =
             if (rem.contains(this.dst)) {
-                Set(GRecv(this.src, this.dst, this.op, cont._1._2))
+                Set(GRecv(env, this.src, this.dst, this.op, cont._1._2))
             } else {
                 Set.empty
             }
         val rem1 = rem - this.dst
-        val nested = if (rem1.isEmpty) Set.empty else cont._2.getActionsAux(rem1)
+        val nested = if (rem1.isEmpty) Set.empty else cont._2.getActionsAux(env, rem1)
         curr ++ nested
 
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
-            Either[String, GType] = a match {
-        case GRecv(src, dst, op, pay) =>
-            if (dst == this.dst) {
-                if (src != this.src || dst != this.dst || op != this.op) {
-                    Left(s"Cannot step $a in: $this")
-                } else {  // Rcv
-                    this.cont.find((k, _) => k == (op, pay)) match {   // ...only checking pay
-                        case None => Left(s"Cannot step $a in: $this")
-                        case Some((_, x)) => Right(x)
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
+            Either[String, (GType, Path)] =
+        a match {
+            case GRecv(pi, src, dst, op, pay) =>
+                if (dst == this.dst) {
+                    if (pi != env || src != this.src || op != this.op) {
+                        Left(s"Cannot step $a in: $this")
+                    } else { // Rcv
+                        this.cont.find((k, _) => k == (op, pay)) match { // ...only checking pay
+                            case None => Left(s"Cannot step $a in: $this")
+                            case Some((_, x)) => Right((x, pi))
+                        }
                     }
+                } else {
+                    stepPiAuxNested(com, env, a)
                 }
-            } else {
-                stepNested(com, a)
-            }
-        case _ => stepNested(com, a)
-    }
+            case _ => stepPiAuxNested(com, env, a)
+        }
 
-    protected def stepNested(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
-            Either[String, GType] =
+    protected def stepPiAuxNested(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
+            Either[String, (GType, Path)] =
         if (this.dst == a.subj) {
             Left(s"Cannot step $a in: $this")
         } else {
             val h = this.cont.head
-            h._2.step(com, a).map(x => GWiggly(this.src, this.dst, this.op, this.cases + (h._1 -> x)))
+            h._2.stepPiAux(com, env, a).map(x =>
+                (GWiggly(this.src, this.dst, this.op, this.cases + (h._1 -> x._1)), x._2))  // x._2 == a.pi
         }
 
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
-            Either[String, (GType, Path)] =
-        step(com, a).map(G => (G, pi))
+    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
+        stepPi(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean = true
 
@@ -234,89 +235,87 @@ class GActiveMixed(
 
     /* ... */
 
-    override def getActionsAux(rem: Set[Role]): Set[GAction] =
-        val left = this.left.getActionsAux(rem).filter({
-            case GSend(src, _, _, _) => !comR.contains(src)
-            case GRecv(src, dst, op, pay) => !comR.contains(dst)
-            case GNu(_) => comR != getLiveRoles
+    override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] =
+        val left = this.left.getActionsAux(env :+ pL, rem).filter({
+            case GSend(_, src, _, _, _) => !comR.contains(src)
+            case GRecv(_, _, dst, _, _) => !comR.contains(dst)
+            case GNu(_, _) => comR != getLiveRoles
         })
-        val right = this.right.getActionsAux(rem).filter({
-            case GSend(src, _, _, _) => !comL.contains(src)
-            case GRecv(src, dst, op, pay) => true
-            case GNu(_) => this.comL.isEmpty
+        val right = this.right.getActionsAux(env :+ pR, rem).filter({
+            case GSend(_, src, _, _, _) => !comL.contains(src)
+            case GRecv(_, _, dst, _, _) => !comL.contains(dst)
+            case GNu(_, _) => this.comL.isEmpty
         })
         left union right
 
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
-            Either[String, GActiveMixed] =
-        stepPi(com, EPSILON, a).map((G, _) => G)
-
-    override def stepPi(com: Map[Role, Map[Mid, Set[Op]]], pi: Path, a: GAction):
+    override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
             Either[String, (GActiveMixed, Path)] =
         val R = getLiveRoles
-        val left = this.left.step(com, a)
-        val right = this.right.step(com, a)
+        val left = this.left.stepPiAux(com, env :+ pL, a)
+        val right = this.right.stepPiAux(com, env :+ pR, a)
         (left, right) match {
-            case (Right(x), Left(_)) =>
-                val res = a match {
-                    case GSend(src, _, _, _) =>
+            case (Right(_G, pi), Left(_)) =>  // pi == a.pi
+                a match {
+                    case GSend(_, src, _, _, _) =>
                         if (comR.contains(src)) {
                             Left(s"Cannot step $a in: $this")
                         } else { // LSnd
-                            Right(GActiveMixed(this.id, x, this.other,
-                                this.obs, this.comL, this.comR, this.right))
+                            Right((GActiveMixed(this.id, _G, this.other,
+                                this.obs, this.comL, this.comR, this.right), pi))
                         }
-                    case GRecv(_, dst, op, pay) =>
+                    case GRecv(_, _, dst, op, pay) =>
                         if (comR.contains(dst)) {
                             Left(s"Cannot step $a in: $this")
                         } else {
                             val comL1 =
-                                if (com(dst)(this.id).contains(op)) {  // LRcv1
+                                if (com(dst)(this.id).contains(op)) { // LRcv1
                                     this.comL + dst
-                                } else {  // LRcv2
+                                } else { // LRcv2
                                     this.comL
                                 }
-                            Right(GActiveMixed(this.id, x, this.other,
-                                this.obs, comL1, this.comR, this.right))
+                            Right((GActiveMixed(this.id, _G, this.other,
+                                this.obs, comL1, this.comR, this.right), pi))
                         }
-                    case GNu(_) =>
+                    case GNu(_, _) =>
                         if (this.comR == R) {
                             Left(s"Cannot step $a in: $this")
-                        } else {  // !!! LNu
-                            Right(GActiveMixed(this.id, x, this.other, this.obs,
-                                this.comL, this.comR, this.right))
+                        } else { // !!! LNu
+                            Right((GActiveMixed(this.id, _G, this.other, this.obs,
+                                this.comL, this.comR, this.right), pi))
                         }
                 }
-                res.map(x => (x, pi :+ pL))
-            case (Left(_), Right(x)) =>
-                val res = a match {
-                    case GSend(src, _, _, _) =>
+            case (Left(_), Right(_G, pi)) =>  // pi == a.pi
+                a match {
+                    case GSend(_, src, _, _, _) =>
                         if (comL.contains(src)) {
                             Left(s"Cannot step $a in: $this")
-                        } else {  // RSnd
+                        } else { // RSnd
                             val comR1 = this.comR + src
-                            Right(GActiveMixed(this.id, this.left, this.other,
-                                this.obs, this.comL, comR1, x))
+                            Right((GActiveMixed(this.id, this.left, this.other,
+                                this.obs, this.comL, comR1, _G), pi))
                         }
-                    case GRecv(_, dst, op, pay) =>
+                    case GRecv(_, _, dst, op, pay) =>
                         if (comR.contains(dst)) { // !!! cf. defs
                             Left(s"Cannot step $a in: $this")
-                        } else {  // RRcv
+                        } else { // RRcv
                             val comR1 = this.comR + dst
-                            Right(GActiveMixed(this.id, this.left, this.other, this.obs,
-                                this.comL, comR1, x))
+                            Right((GActiveMixed(this.id, this.left, this.other, this.obs,
+                                this.comL, comR1, _G), pi))
                         }
-                    case GNu(_) =>
+                    case GNu(_, _) =>
                         if (this.comL.nonEmpty) {
                             Left(s"Cannot step $a in: $this")
-                        } else {  // !!! RNu
-                            Right(GActiveMixed(this.id, this.left, this.other,
-                                this.obs, this.comL, this.comR, x))
+                        } else { // !!! RNu
+                            Right((GActiveMixed(this.id, this.left, this.other,
+                                this.obs, this.comL, this.comR, _G), pi))
                         }
                 }
-                res.map(x => (x, pi :+ pR))
             case _ => Left(s"Cannot step $a in: $this")
         }
+
+    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
+            Either[String, GActiveMixed] =
+        stepPi(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean =
         if (this.comL == all) {
@@ -344,7 +343,7 @@ case class GSystem(rcom: Map[Role, Map[Mid, Set[Op]]], G: GType)
     override def getActions: Set[GAction] = this.G.getActions
 
     override def stepPi(a: GAction): Either[String, (GSystem, Path)] =
-        this.G.stepPi(this.rcom, EPSILON, a)
+        this.G.stepPi(this.rcom, a)
             .map((G, pi) => (GSystem(this.rcom, G), pi))
 
     override def isSafeTermination: Boolean = this.G.isSafeTermination(rcom.keySet)

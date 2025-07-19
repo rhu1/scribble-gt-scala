@@ -11,7 +11,7 @@ case class LRho(subj: Role) extends YAction {}
 
 sealed trait LAction extends YAction { }
 
-// !!! Same as GAction -- N.B. not using Msg, correspondence just erases pi anyway...
+// Same as GIO
 sealed abstract class LIO extends LAction {
     val src: Role
     val dst: Role

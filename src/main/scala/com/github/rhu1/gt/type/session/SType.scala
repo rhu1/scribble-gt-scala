@@ -60,7 +60,8 @@ val EPSILON: Path = List.empty[pLR]
 /* ... */
 
 trait SAction {
-    val subj: Role
+    val pi: Path  // !!! for deterministic GType step, and for correspondence
+    val subj: Role  // ...dummy for GNu -- useful for all others
 }
 
 trait SSystem[+T <: SSystem[T, U], U <: SAction] {
