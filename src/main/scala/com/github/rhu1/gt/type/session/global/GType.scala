@@ -90,15 +90,12 @@ trait GType extends SType {
     // Pre: rcom.keySet == all roles
     def projectSystem(rcom: Map[Role, Map[Mid, Set[Op]]]): Option[LSystem] =
         val all = rcom.keySet
-        val R = getLiveRoles
+        //val R = getLiveRoles  // XXX [...|>(r) ...end]
         for {
             ps <- all.foldLeft(Option[Map[Role, Participant]](Map.empty)) {
                 case (Some(acc), r) =>
-                    if (R.contains(r)) {
-                        rproject(all, r).map(y => acc + (r -> Participant(r, rcom(r), y._1, y._2)))
-                    } else {
-                        Some(acc + (r -> Participant(r, rcom(r), LEnd, Sigma(all - r))))
-                    }
+                    println(s"aaaaa: $this ,, $r")
+                    rproject(all, r).map((L, q) => acc + (r -> Participant(r, rcom(r), L, q)))  // Handles end and equiv. ended-MCs
                 case _ => None
             }
         } yield LSystem(ps)
@@ -574,14 +571,13 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
-            (b, s) <- this.body.rprojectAux(all, pi, r)
+            (b, q) <- this.body.rprojectAux(all, pi, r)
             b1 = b match {
                 case LEnd => LEnd
-                case LRecVar(v) => if (v == this.rvar) LEnd else LRecVar(v)
+                case LRecVar(v) => if (v == this.rvar) LEnd else LRecVar(v)  // !!! cf. mu t . t'
                 case _ => LRec(this.rvar, b)
             }
-            s1 <- if (s.isEmpty) Some(EMPTY_SIGMA) else None
-        } yield (b1, s1)
+        } yield (b1, q)
 
     /* ... */
 

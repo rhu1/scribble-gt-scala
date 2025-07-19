@@ -46,7 +46,8 @@ case class GWiggly(
            cases: ListMap[(Op, Payload), GType]
        ) extends GRuntimeType {
 
-    private val cont: ListMap[(Op, Payload), GType] = this.cases.filter(_._1._1 == this.op)
+    private val cont: ListMap[(Op, Payload), GType] =
+        this.cases filter { case ((op, _), _) => op == this.op }
 
     /* ... */
 
@@ -72,24 +73,28 @@ case class GWiggly(
         for {
             (cases, sigmas) <-
                 this.cases.foldLeft
-                   (Option((ListMap.empty[(Op, Payload), LType], ListMap.empty[Op, Sigma]))) {
+                    (Option[(ListMap[(Op, Payload), LType], ListMap[Op, Sigma])](ListMap.empty, ListMap.empty)) {
                        case (None, _) => None
                        case (Some(acc), (k, g)) =>
                            g.rprojectAux(all, pi, r)
-                            .map(y => (acc._1 + ((k, y._1)), acc._2 + (k._1 -> y._2)))
+                            .map((L, q) => (acc._1 + ((k, L)), acc._2 + (k._1 -> q)))
                    }
             head <- this.cont.headOption  // head._1._1 == this.op
             res <-
                 if (r == this.src) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
-                    if (filt.size != 1 || filt.head.nonEmpty) {  // !!! cf. no check
+                    println(s"eeee1: $r ,, $filt")
+                    if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. not checked
+                            || filt.size > 2) {
                         None
                     } else {
+                        println(s"eeee2: $r")
                         Some((cases(head._1), sigmas(this.op)))
                     }
                 } else if (r == this.dst) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
-                    if (filt.size != 1 || filt.head.nonEmpty) {  // !!! cf. just pairwise equal
+                    if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. just pairwise equal
+                            || filt.size > 2) {
                         None
                     } else {
                         val s: Sigma = sigmas(this.op)
@@ -215,19 +220,31 @@ class GActiveMixed(
     /* ... */
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
+        println(s"bbbbb1: $this ,, $r")
         if (this.comL contains r) {
+            println(s"ccccc1: $this ,, $r")
             this.left.rprojectAux(all, pi :+ pL, r) map {
-                case (p, s) => (LActiveLeft(this.id, p), s)
+                case (_L, q) => (LActiveLeft(this.id, _L), q)
             }
         } else if (this.comR contains r) {
+            println(s"ccccc2: $this ,, $r")
             this.right.rprojectAux(all, pi :+ pR, r) map {
-                case (p, s) => (LActiveRight(this.id, p), s)
+                case (_L, q) => (LActiveRight(this.id, _L), q)
             }
         } else {
             for {
-               left <- this.left.rprojectAux(all, pi :+ pL, r)
-               right <- this.right.rprojectAux(all, pi :+ pR, r)
-               s <- left._2 circ right._2
+               left <- {
+                   //println(s"bbbbb2: ${this.left.rprojectAux(all, pi :+ pL, r)}");
+                   this.left.rprojectAux(all, pi :+ pL, r)
+               }
+               right <- {
+                   //println(s"bbbbb3: ${this.right.rprojectAux(all, pi :+ pR, r)}");
+                   this.right.rprojectAux(all, pi :+ pR, r)
+               }
+               s <- {
+                   //println(s"bbbbb4: ${left._2 circ right._2}")
+                   left._2 circ right._2
+               }
             } yield (
                 LActiveMixed(this.id, left._1, this.obs, right._1), s)
         }

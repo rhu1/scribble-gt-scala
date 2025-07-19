@@ -51,6 +51,7 @@ object LType {
         case (LActiveLeft(i1, l1), LActiveLeft(i2, l2)) => i1 == i2 && pre(l1, l2)
         case (LActiveRight(i1, r1), LActiveRight(i2, r2)) => i1 == i2 && pre(r1, r2)
         case (LRec(v1, b1), LRec(v2, b2)) => v1 == v2 && pre(b1, b2)
+        case (LRec(v1, b1), _) => pre(LRec(v1, b1).unfold, y)
         case (LRecVar(v1), LRecVar(v2)) => v1 == v2
         case (LEnd, LEnd) => true
         case _ => false

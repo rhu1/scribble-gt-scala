@@ -89,7 +89,8 @@ object Sigma {
 
 implicit class SigmaOps[A <: Sigma](a: A) {
 
-    def hasNoMessages: Boolean = a.values.forall(_.isEmpty)
+    // !!! cf. isEmpty (empty keySet)
+    def isEmptyQueues: Boolean = a.values.forall(_.isEmpty)
 
     def circ(b: A): Option[Sigma] =
         if (a.keySet == b.keySet) {
@@ -109,7 +110,7 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
         throw new RuntimeException(s"Invalid sigma for $r: $q")
     }
 
-    // Only includes LRho when not a "skip"
+    // Only includes LRho when not a "skip" (but `gc` will accept skip)
     def getActions: Set[YAction] =
         val gc: Set[YAction] =
             if (this.q.containsStale(this.L)) Set(LRho(this.r)) else Set.empty[YAction]
@@ -125,13 +126,17 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
         this.L.step(com, EPSILON, a, this.q).map(
             (pi, L1, q1) => (pi, Participant(this.r, this.com, L1, q1)))
 
+    // Accepts "skip" LRho (though not returned by getActions)
     def gc(a: LRho): Either[String, Participant] =
         Either.cond(a.subj == this.r,
-            Participant(this.r, this.com, L, this.q.gc(this.L)),
+            Participant(this.r, this.com, this.L, this.q.gc(this.L)),
             s"Cannot gc $a in: $this"
         )
 
-    def isSafeTermination: Boolean = this.L.isEnded && this.q.hasNoMessages
+    protected[local] def quietGC: Participant =
+        Participant(this.r, this.com, this.L, this.q.gc(this.L))
+
+    def isSafeTermination: Boolean = this.L.isEnded && this.q.isEmptyQueues
 
     // this <: x
     def pre(x: Participant): Boolean = this.r == x.r && this.L.pre(x.L) && this.q == x.q
@@ -169,6 +174,8 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     override def isSafeTermination: Boolean = this.ps.values.forall(_.isSafeTermination)
 
     override def run(): Unit = SSystem.run(this)
+
+    def gcAll: LSystem = LSystem(ps.map((r, Y) => r -> Y.quietGC))
 
     def pre(x: LSystem): Boolean =
         println(s"\n2222:\n$this\n$x\n")

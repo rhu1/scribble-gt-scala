@@ -75,7 +75,7 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
         val aYs = this.Y.getActions
         def ok(x: GAction): Boolean = x match {
             case x: GIO => aYs.contains(x.toLAction(x.subj))
-            case x: GNu => aYs.exists(_.isInstanceOf[LNu])  // !!!
+            case x: GNu => aYs.exists(_.isInstanceOf[LNu])  // !!! -- just pick one, <: will do any others
         }
         if (aGs.forall(x => ok(x))) aGs else Set.empty
 
@@ -85,10 +85,10 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
         for {
             aY <- a match {
                 case x: GIO => Right(x.toLAction(x.subj))
-                case x: GNu => aYs.find(_.isInstanceOf[LNu]).toRight("a" + err)
+                case x: GNu => aYs.find(_.isInstanceOf[LNu]).toRight("a" + err)  // just pick one, <: will do any others
             }
             G1 <- this.G.stepPi(a)
-            Y1 <- this.Y.stepPi(aY)
+            Y1 <- this.Y.stepPi(aY).map((Y, pi) => (Y.gcAll, pi))
             _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("b" + err)
             res <- Either.cond(Y1._1.pre(_YG) && G1._2 == Y1._2,
                 (ComSim(G1._1, _YG), G1._2),
