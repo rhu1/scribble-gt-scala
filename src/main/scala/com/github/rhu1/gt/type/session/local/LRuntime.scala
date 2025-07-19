@@ -128,6 +128,9 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
         )
 
     def isSafeTermination: Boolean = this.L.isEnded && this.q.hasNoMessages
+
+    // this <: x
+    def pre(x: Participant): Boolean = this.r == x.r && this.L.pre(x.L) && this.q == x.q
 }
 
 case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction] {
@@ -162,6 +165,9 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     override def isSafeTermination: Boolean = this.ps.values.forall(_.isSafeTermination)
 
     override def run(): Unit = SSystem.run(this)
+
+    def pre(x: LSystem): Boolean =
+        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => Y.pre(x.ps(r)))
 
     override def toString: String =
         val ps = this.ps.mkString("\n\t")

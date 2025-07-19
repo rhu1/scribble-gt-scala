@@ -27,9 +27,34 @@ trait LType extends SType {
             Either[String, (Path, LType, Sigma)]
 
     def isEnded: Boolean
+
+    // this <: x
+    def pre(x: LType): Boolean = LType.pre(this, x)
 }
 
 object LType {
+
+    // x <: y
+    def pre(x: LType, y: LType): Boolean = (x, y) match {
+        case (LBranch(s1, c1), LBranch(s2, c2)) =>
+            s1 == s2 && c1.keySet == c2.keySet &&
+                c1.keySet.forall(k => pre(c1(k), c2(k)))
+        case (LSelect(s1, c1), LSelect(s2, c2)) =>
+            s1 == s2 && c1.keySet == c2.keySet &&
+                c1.keySet.forall(k => pre(c1(k), c2(k)))
+        case (LMixed(i1, l1, o1, r1), LMixed(i2, l2, o2, r2)) =>
+            i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
+        case (LActiveMixed(i1, l1, o1, r1), LActiveMixed(i2, l2, o2, r2)) =>
+            i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
+        case (LMixed(i1, l1, o1, r1), LActiveMixed(i2, l2, o2, r2)) =>
+            i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
+        case (LActiveLeft(i1, l1), LActiveLeft(i2, l2)) => i1 == i2 && pre(l1, l2)
+        case (LActiveRight(i1, r1), LActiveRight(i2, r2)) => i1 == i2 && pre(r1, r2)
+        case (LRec(v1, b1), LRec(v2, b2)) => v1 == v2 && pre(b1, b2)
+        case (LRecVar(v1), LRecVar(v2)) => v1 == v2
+        case (LEnd, LEnd) => true
+        case _ => false
+    }
 
     def merge(x: LType, y: LType): Option[LType] =
         if (x == y) {
