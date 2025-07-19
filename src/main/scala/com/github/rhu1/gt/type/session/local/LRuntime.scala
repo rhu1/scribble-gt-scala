@@ -7,7 +7,9 @@ import scala.annotation.tailrec
 
 sealed trait YAction extends SAction {}
 
-case class LRho(subj: Role) extends YAction {}
+case class LRho(subj: Role) extends YAction {
+    val pi = EPSILON
+}
 
 sealed trait LAction extends YAction { }
 
@@ -19,18 +21,18 @@ sealed abstract class LIO extends LAction {
     val pay: Payload
 }
 
-case class LSend(src: Role, dst: Role, op: Op, pay: Payload) extends LIO {
+case class LSend(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends LIO {
     val subj: Role = src
-    override def toString: String = s"$src!$dst:$op($pay)"
+    override def toString: String = s"$src!$dst:${Msg(op, pay, pi).toString}"
 }
 
-case class LRecv(src: Role, dst: Role, op: Op, pay: Payload) extends LIO {
+case class LRecv(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends LIO {
     val subj: Role = dst
-    override def toString: String = s"$src?$dst:$op($pay)"  // pq?a -- p is sender
+    override def toString: String = s"$src?$dst:${Msg(op, pay, pi).toString}"  // pq?a -- p is sender
 }
 
 // !!! subj and c
-case class LNu(subj: Role, c: Mid) extends LAction {}
+case class LNu(pi: Path, subj: Role, c: Mid) extends LAction {}
 
 
 /* ... */
@@ -140,12 +142,12 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     def step(a: YAction): Either[String, LSystem] = stepPi(a).map(_._1)
 
     override def stepPi(a: YAction): Either[String, (LSystem, Path)] = a match {
-        case LSend(src, dst, op, pay) =>
+        case LSend(_, src, dst, op, pay) =>
             val err = s"Cannot step $a in: $this"
             for {
                 ps <- this.ps.get(src).toRight(err)
                 pp <- ps.step(a)
-                (pi, ps1) = pp
+                (pi, ps1) = pp  // pi == _ Path
                 pd <- this.ps.get(dst).toRight(err)
                 qs <- pd.q.get(src).map(_.appended(Msg(op, pay, pi))).toRight(err)
                 pd1 = Participant(dst, pd.com, pd.L, pd.q + (src -> qs))

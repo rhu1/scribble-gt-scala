@@ -16,12 +16,16 @@ sealed abstract class GIO extends GAction {
 
 case class GSend(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends GIO {
     val subj = this.src
-    override def toString: String = s"$src!$dst:$op($pay)"
+    override def toString: String = 
+        val pay = if (this.pay.elems.isEmpty) "" else s"${this.pay}, "  // cf. Msg
+        s"$src!$dst:$op($pay$pi)"
 }
 
 case class GRecv(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends GIO {
     val subj = this.dst
-    override def toString: String = s"$src?$dst:$op($pay)"  // pq?a -- p is sender
+    override def toString: String =
+        val pay = if (this.pay.elems.isEmpty) "" else s"${this.pay}, "  // cf. Msg
+        s"$src?$dst:$op($pay$pi)"  // pq?a -- p is sender
 }
 
 // !!! c

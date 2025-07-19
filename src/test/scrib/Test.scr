@@ -1,7 +1,7 @@
 module Test;
 
 
-/* // Testing step
+//* // Testing step
 global protocol Proto1(role A, role B) {
     1() from A to B;
     2() from B to A;
@@ -67,7 +67,7 @@ global protocol Proto1(role A, role B) {
 }
 //*/
 
-//* // Testing step
+/* // Testing step
 global protocol Proto1(role A, role B) {
     rec X {
         mixed {

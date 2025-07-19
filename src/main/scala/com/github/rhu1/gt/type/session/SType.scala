@@ -60,7 +60,7 @@ val EPSILON: Path = List.empty[pLR]
 /* ... */
 
 trait SAction {
-    val pi: Path  // !!! for deterministic GType step, and for correspondence
+    val pi: Path  // !!! for deterministic GType step, and for correspondence -- EPSILON for LRho
     val subj: Role  // ...dummy for GNu -- useful for all others
 }
 
@@ -126,7 +126,7 @@ object SSystem {
             val pop = todo.last
             todo -= pop
             done += pop
-            val (_Y1, a1) = pop  // r == a1.subj, redundant
+            val (_Y1, a1) = pop
             val (i, trace) = hist(_Y1)
             val ind = "    " * trace.size
             println(indent(ind, ind, s"$i: $_Y1"))
