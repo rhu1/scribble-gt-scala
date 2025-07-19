@@ -92,17 +92,17 @@ object SSystem {
         }
         // Pre: Y in hist.keySet
         def checkAndAddTodo(top: String, pi: Path, Y: T, as: Set[U]): Unit = {
-            val h = hist(Y)
+            val (i, trace) = hist(Y)
             if (as.isEmpty) {
                 if (!Y.isSafeTermination) {
                     throw new RuntimeException(s"Stuck: $pi: $Y")
                 }
-                println(s"$top\t${h._1} terminated.")
+                println(s"$top\t$i terminated.")
             } else {
                 if (pi.size > 3) {
-                    println(s"$top\tPruning ${h._1} at ${pi} ...")
-                } else if (h._2.size > 12) {  // cf. non-terminating rec within MC
-                    println(s"$top\tPruning ${h._1} at ${h._2} ...")
+                    println(s"$top\tPruning $i at ${pi} ...")
+                } else if (trace.size > 10) {  // cf. non-terminating rec within MC
+                    println(s"$top\tPruning $i at $trace ...")
                 } else {
                     for a <- as do // as nonEmpty
                         val s = (Y, a) // r == a.subj, redundant

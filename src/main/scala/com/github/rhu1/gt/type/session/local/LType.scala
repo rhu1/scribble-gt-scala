@@ -21,6 +21,8 @@ trait LType extends SType {
     def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction]
 
     // Sigma is local (in) queue -- send queue managed by System.step
+    // For leafs, a.pi == env
+    // For all, res Path == a.pi
     def step(com: Map[Mid, Set[Op]], pi: Path, a: LAction, q: Sigma):
             Either[String, (Path, LType, Sigma)]
 
