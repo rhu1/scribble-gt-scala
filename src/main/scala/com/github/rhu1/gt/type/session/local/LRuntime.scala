@@ -43,21 +43,17 @@ case class Sig(op: Op, pay: Payload) {
     override def toString: String = s"$op($pay)"
 }*/
 
-// !!! m = alpha  // Actual queue contents (cf. LAction, no pi)
-case class Msg(op: Op, pay: Payload, pi: Path) {
+// Role is src
+type Sigma = Map[Role, List[Msg]]
+val EMPTY_SIGMA = Map.empty[Role, List[Msg]]
 
-    def isStale(L: LType): Boolean = Msg.isStaleAux(this.pi, L)
+implicit class LMsg[A <: Msg](a: A) {
 
-    override def toString: String =
-        val pay = if (this.pay.elems.isEmpty) "" else s"${this.pay}, "
-        s"$op($pay$pi)"
-}
-
-object Msg {
+    final def isStale(L: LType): Boolean = isStaleAux(a.pi, L)
 
     @tailrec
-    private def isStaleAux(pi: Path, L: LType): Boolean = pi match {
-        case List() => false  // EPSILON == List() == Nil
+    final def isStaleAux(pi: Path, L: LType): Boolean = pi match {
+        case List() => false // EPSILON == List() == Nil
         case h :: t => h match {
             //case pL() => L match {
             case _: pL.type => L match {
@@ -76,10 +72,6 @@ object Msg {
         }
     }
 }
-
-// Role is src
-type Sigma = Map[Role, List[Msg]]
-val EMPTY_SIGMA = Map.empty[Role, List[Msg]]
 
 object Sigma {
     def apply(rs: Set[Role]): Sigma = rs.map(r => (r, List.empty[Msg])).toMap

@@ -56,6 +56,14 @@ object pR extends pLR {
 type Path = List[pLR]
 val EPSILON: Path = List.empty[pLR]
 
+// !!! m = alpha
+case class Msg(op: Op, pay: Payload, pi: Path) {
+
+    override def toString: String =
+        val pay = if (this.pay.elems.isEmpty) "" else s"${this.pay}, "
+        s"$op($pay$pi)"
+}
+
 
 /* ... */
 
