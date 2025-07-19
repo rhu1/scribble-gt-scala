@@ -142,7 +142,7 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
 
     override def getActions: Set[YAction] = getRoleActions.flatMap(_._2).toSet
 
-    def step(a: YAction): Either[String, LSystem] = stepPi(a).map(_._1)
+    //def step(a: YAction): Either[String, LSystem] = stepPi(a).map(_._1)
 
     override def stepPi(a: YAction): Either[String, (LSystem, Path)] = a match {
         case LSend(_, src, dst, op, pay) =>
@@ -167,7 +167,8 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     override def run(): Unit = SSystem.run(this)
 
     def pre(x: LSystem): Boolean =
-        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => Y.pre(x.ps(r)))
+        //println(s"\n2222:\n$this\n$x\n")
+        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => { println(s"3333: $r ${Y.pre(x.ps(r))}"); Y.pre(x.ps(r)) })
 
     override def toString: String =
         val ps = this.ps.mkString("\n\t")

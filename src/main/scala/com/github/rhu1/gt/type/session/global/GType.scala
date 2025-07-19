@@ -87,6 +87,11 @@ trait GType extends SType {
 
     protected[global] def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)]
 
+    // HERE rprojectall for sim queues
+    def projectAll: Option[Map[Role, LType]] = getLiveRoles.foldLeft(Option[Map[Role, LType]](Map.empty)) {
+            case (Some(acc), r) => project(r).map(y => acc + (r -> y))
+            case _ => None
+        }
 
     /* dynamics */
 
@@ -94,11 +99,10 @@ trait GType extends SType {
     
     protected[global] def getActionsAux(env: Path, rem: Set[Role]): Set[GAction]
 
-    // !!! pi needed for determinism, e.g., B!A:3 in [ mu X...X |> 3() from B to A ]
-    // CHECKME Post: res Path == a.path?
     /*def stepPi(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, (GType, Path)]
         = stepPiAux(com, EPSILON, a)*/
 
+    // !!! pi needed for determinism, e.g., B!A:3 in [ mu X...X |> 3() from B to A ]
     // For leafs, a.pi == env
     // For all, res Path == a.pi
     def stepPi(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
@@ -108,9 +112,8 @@ trait GType extends SType {
     protected[global] def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, entered: Set[RecVar], a: GAction):
             Either[String, (GType, Path)]
 
-    // deprecate?
-    def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
-        = stepPi(com, EPSILON, a).map((G, _) => G)
+    /*def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
+        = stepPi(com, EPSILON, a).map((G, _) => G)*/
 
     // Post: keySet == getLiveRoles
     def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
@@ -695,9 +698,6 @@ object GEnd extends GType {
     /* ... */
 
     override def getActionsAux(env: Path, rem: Set[Role]): Set[GAction] = Set.empty
-
-    override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
-        Left(s"Stuck: $this")
 
     override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, entered: Set[RecVar], a: GAction):
             Either[String, (GType, Path)] =

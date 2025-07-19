@@ -76,7 +76,7 @@ case class GWiggly(
                        case (None, _) => None
                        case (Some(acc), (k, g)) =>
                            g.rprojectAux(pi, r)
-                            .map(y => (acc._1 + ((k, y._1)), acc._2 + ((k._1 -> y._2))))
+                            .map(y => (acc._1 + ((k, y._1)), acc._2 + (k._1 -> y._2)))
                    }
             head <- this.cont.headOption  // head._1._1 == this.op
             res <-
@@ -308,23 +308,4 @@ class GActiveMixed(
 
     override def toString: String =
         s"[${this.left} $comL ${ConsoleColours.BLACK_TRIANGLE}${id}_${this.other},${this.obs} $comR ${this.right}]"
-}
-
-
-/* ... */
-
-// Root committing with current top-level G
-// Pre: rcom.keySet == root getLiveRoles
-case class GSystem(rcom: Map[Role, Map[Mid, Set[Op]]], G: GType)
-    extends SSystem[GSystem, GAction] {
-
-    override def getActions: Set[GAction] = this.G.getActions(EPSILON)  // cf. Participant
-
-    override def stepPi(a: GAction): Either[String, (GSystem, Path)] =
-        this.G.stepPi(this.rcom, EPSILON, a)
-            .map((G, pi) => (GSystem(this.rcom, G), pi))
-
-    override def isSafeTermination: Boolean = this.G.isSafeTermination(rcom.keySet)
-
-    override def run(): Unit = SSystem.run(this)
 }
