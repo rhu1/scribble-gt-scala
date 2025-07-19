@@ -117,13 +117,17 @@ case class GWiggly(
 
     /* ... */
 
-    override def getActions: Set[GAction] =
+    override def getActionsAux(rem: Set[Role]): Set[GAction] =
         val cont = this.cont.head
-        Set(GRecv(this.src, this.dst, this.op, cont._1._2)) union
-            cont._2.getActions.filter {
-                case x: GIO => x.src != this.dst && x.dst != this.dst
-                case _ => false
+        val curr =
+            if (rem.contains(this.dst)) {
+                Set(GRecv(this.src, this.dst, this.op, cont._1._2))
+            } else {
+                Set.empty
             }
+        val rem1 = rem - this.dst
+        val nested = if (rem1.isEmpty) Set.empty else cont._2.getActionsAux(rem1)
+        curr ++ nested
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
             Either[String, GType] = a match {
@@ -228,15 +232,15 @@ class GActiveMixed(
         }
 
 
-        /* ... */
+    /* ... */
 
-    override def getActions: Set[GAction] =
-        val left = this.left.getActions.filter({
+    override def getActionsAux(rem: Set[Role]): Set[GAction] =
+        val left = this.left.getActionsAux(rem).filter({
             case GSend(src, _, _, _) => !comR.contains(src)
             case GRecv(src, dst, op, pay) => !comR.contains(dst)
             case GNu(_) => comR != getLiveRoles
         })
-        val right = this.right.getActions.filter({
+        val right = this.right.getActionsAux(rem).filter({
             case GSend(src, _, _, _) => !comL.contains(src)
             case GRecv(src, dst, op, pay) => true
             case GNu(_) => this.comL.isEmpty

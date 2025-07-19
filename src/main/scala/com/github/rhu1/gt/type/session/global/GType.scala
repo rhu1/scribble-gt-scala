@@ -90,7 +90,9 @@ trait GType extends SType {
 
     /* dynamics */
 
-    def getActions: Set[GAction]
+    def getActions: Set[GAction] = getActionsAux(getLiveRoles)
+    
+    protected[global] def getActionsAux(rem: Set[Role]): Set[GAction]
 
     def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
 
@@ -283,22 +285,28 @@ case class GInteraction(
 
     /* ... */
 
-    override def getActions: Set[GAction] =
-        val pq = Set(this.src, this.dst)
-        this.cases.keySet.map((o, d) =>
-            GSend(this.src, this.dst, o, d)) union
-                this.cases.values
-                    .map(_.getActions filter {
-                        case x: GIO => !pq.contains(x.src) && !pq.contains(x.dst)
-                        case _ => false
-                    })
-                    .reduce((x, y) => x intersect y)
+    override def getActionsAux(rem: Set[Role]): Set[GAction] =
+        val curr =
+            if (rem.contains(this.src)) {
+                this.cases.keySet.map((o, d) => GSend(this.src, this.dst, o, d))
+            } else {
+                Set.empty
+            }
+        val rem1 = rem -- Set(this.src, this.dst)
+        val nested =
+            if (rem1.isEmpty) {
+                Set.empty
+            } else {
+                this.cases.values.map(_.getActionsAux(rem1))
+                    .reduce((x, y) => x intersect y)  // !!! intersect redundant, only unary nonEmpty (no indifferent)
+            }
+        curr ++ nested
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
         = a match {
             case GSend(src, dst, op, pay) =>
-                if (src == this.src || dst == this.dst) {
-                    if (src != this.src || dst != this.dst) {
+                if (src == this.src) {
+                    if (dst != this.dst) {
                         Left(s"Cannot step $a in: $this")
                     } else {
                         this.cases.find((k, _) => k == (op, pay)) match {
@@ -454,7 +462,7 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
-    override def getActions: Set[GAction] = Set(GNu(this.id))
+    override def getActionsAux(rem: Set[Role]): Set[GAction] = Set(GNu(this.id))
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GActiveMixed] = a match {
         case GNu(c) =>
@@ -546,8 +554,8 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     /* ... */
 
-    override def getActions: Set[GAction] =
-        unfold |> (_.getActions)
+    override def getActionsAux(rem: Set[Role]): Set[GAction] =
+        unfold |> (_.getActionsAux(rem))
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
         unfold |> (_.step(com, a))
@@ -604,7 +612,7 @@ case class GRecVar(rvar: RecVar) extends GType {
         
     /* ... */
 
-    override def getActions: Set[GAction] = Set()
+    override def getActionsAux(rem: Set[Role]): Set[GAction] = Set()
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
         Left(s"Shouldn't get here: $this")
@@ -662,7 +670,7 @@ object GEnd extends GType {
         
     /* ... */
 
-    override def getActions: Set[GAction] = Set()
+    override def getActionsAux(rem: Set[Role]): Set[GAction] = Set()
 
     override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
         Left(s"Stuck: $this")
