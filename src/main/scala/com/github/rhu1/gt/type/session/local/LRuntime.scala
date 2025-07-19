@@ -103,7 +103,11 @@ implicit class SigmaOps[A <: Sigma](a: A) {
     def gc(L: LType): Sigma = a.map((r, ms) => (r, ms.filter(!_.isStale(L))))
 }
 
+// q.keySet == all roles - r  -- i.e., rcom.keySet - r
 case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
+    if (q.keySet.isEmpty || q.keySet.contains(r)) {
+        throw new RuntimeException(s"Invalid sigma for $r: $q")
+    }
 
     // Only includes LRho when not a "skip"
     def getActions: Set[YAction] =
@@ -167,7 +171,7 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     override def run(): Unit = SSystem.run(this)
 
     def pre(x: LSystem): Boolean =
-        //println(s"\n2222:\n$this\n$x\n")
+        println(s"\n2222:\n$this\n$x\n")
         this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => { println(s"3333: $r ${Y.pre(x.ps(r))}"); Y.pre(x.ps(r)) })
 
     override def toString: String =

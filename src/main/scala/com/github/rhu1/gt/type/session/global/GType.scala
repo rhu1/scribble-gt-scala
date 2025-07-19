@@ -81,17 +81,27 @@ trait GType extends SType {
 
     /* projection */
 
-    def project(r: Role): Option[LType] = rproject(r).map(_._1)
+    def project(r: Role): Option[LType] = rproject(getLiveRoles, r).map(_._1)
 
-    def rproject(r: Role): Option[(LType, Sigma)] = rprojectAux(EPSILON, r)
+    def rproject(all: Set[Role], r: Role): Option[(LType, Sigma)] = rprojectAux(all, EPSILON, r)
 
-    protected[global] def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)]
+    protected[global] def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)]
 
-    // HERE rprojectall for sim queues
-    def projectAll: Option[Map[Role, LType]] = getLiveRoles.foldLeft(Option[Map[Role, LType]](Map.empty)) {
-            case (Some(acc), r) => project(r).map(y => acc + (r -> y))
-            case _ => None
-        }
+    // Pre: rcom.keySet == all roles
+    def projectSystem(rcom: Map[Role, Map[Mid, Set[Op]]]): Option[LSystem] =
+        val all = rcom.keySet
+        val R = getLiveRoles
+        for {
+            ps <- all.foldLeft(Option[Map[Role, Participant]](Map.empty)) {
+                case (Some(acc), r) =>
+                    if (R.contains(r)) {
+                        rproject(all, r).map(y => acc + (r -> Participant(r, rcom(r), y._1, y._2)))
+                    } else {
+                        Some(acc + (r -> Participant(r, rcom(r), LEnd, Sigma(all - r))))
+                    }
+                case _ => None
+            }
+        } yield LSystem(ps)
 
     /* dynamics */
 
@@ -274,13 +284,13 @@ case class GInteraction(
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
             (cases, sigmas) <- this.cases.foldLeft
                 (Option((ListMap.empty[(Op, Payload), LType], List.empty[Sigma]))) {
                     case (None, _) => None
                     case (Some(acc), (k, g)) =>
-                        g.rprojectAux(pi, r).map(y => (acc._1 + ((k, y._1)), acc._2 :+ y._2))
+                        g.rprojectAux(all, pi, r).map(y => (acc._1 + ((k, y._1)), acc._2 :+ y._2))
                 }
             cs <-
                 if (r == this.src) {
@@ -464,10 +474,10 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
-            left <- this.left.rprojectAux(pi, r)
-            right <- this.right.rprojectAux(pi, r)
+            left <- this.left.rprojectAux(all, pi, r)
+            right <- this.right.rprojectAux(all, pi, r)
             s0 <- if (left._2 == right._2) Some(left._2) else None
             obs <- right._1 match {
                 case LSelect(_, _) => Some(this.obs)
@@ -562,9 +572,9 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
-            (b, s) <- this.body.rprojectAux(pi, r)
+            (b, s) <- this.body.rprojectAux(all, pi, r)
             b1 = b match {
                 case LEnd => LEnd
                 case LRecVar(v) => if (v == this.rvar) LEnd else LRecVar(v)
@@ -632,8 +642,8 @@ case class GRecVar(rvar: RecVar) extends GType {
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
-        Some((LRecVar(this.rvar), EMPTY_SIGMA))
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
+        Some((LRecVar(this.rvar), Sigma(all - r)))
         
     /* ... */
 
@@ -692,8 +702,8 @@ object GEnd extends GType {
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] = 
-        Some((LEnd, EMPTY_SIGMA))
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
+        Some((LEnd, Sigma(all - r)))
         
     /* ... */
 

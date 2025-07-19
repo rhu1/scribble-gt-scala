@@ -68,14 +68,14 @@ case class GWiggly(
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
         for {
             (cases, sigmas) <-
                 this.cases.foldLeft
                    (Option((ListMap.empty[(Op, Payload), LType], ListMap.empty[Op, Sigma]))) {
                        case (None, _) => None
                        case (Some(acc), (k, g)) =>
-                           g.rprojectAux(pi, r)
+                           g.rprojectAux(all, pi, r)
                             .map(y => (acc._1 + ((k, y._1)), acc._2 + (k._1 -> y._2)))
                    }
             head <- this.cont.headOption  // head._1._1 == this.op
@@ -214,19 +214,19 @@ class GActiveMixed(
 
     /* ... */
 
-    override def rprojectAux(pi: Path, r: Role): Option[(LType, Sigma)] =
+    override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
         if (this.comL contains r) {
-            this.left.rprojectAux(pi :+ pL, r) map {
+            this.left.rprojectAux(all, pi :+ pL, r) map {
                 case (p, s) => (LActiveLeft(this.id, p), s)
             }
         } else if (this.comR contains r) {
-            this.right.rprojectAux(pi :+ pR, r) map {
+            this.right.rprojectAux(all, pi :+ pR, r) map {
                 case (p, s) => (LActiveRight(this.id, p), s)
             }
         } else {
             for {
-               left <- this.left.rprojectAux(pi :+ pL, r)
-               right <- this.right.rprojectAux(pi :+ pR, r)
+               left <- this.left.rprojectAux(all, pi :+ pL, r)
+               right <- this.right.rprojectAux(all, pi :+ pR, r)
                s <- left._2 circ right._2
             } yield (
                 LActiveMixed(this.id, left._1, this.obs, right._1), s)

@@ -89,8 +89,7 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
             }
             G1 <- this.G.stepPi(a)
             Y1 <- this.Y.stepPi(aY)
-            rLs <- G1._1.G.projectAll.toRight("b" + err)
-            _YG <- Right(LSystem(rLs.map((r, L) => (r, Participant(r, this.G.rcom(r), L, Y1._1.ps(r).q)))))
+            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("b" + err)
             res <- Either.cond(Y1._1.pre(_YG) && G1._2 == Y1._2,
                 (ComSim(G1._1, _YG), G1._2),
                 "c" + err)
