@@ -85,7 +85,7 @@ case class GWiggly(
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
                     println(s"eeee1: $r ,, $filt")
                     if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. not checked
-                            || filt.size > 2) {
+                            || filt.size >= 2) {
                         None
                     } else {
                         println(s"eeee2: $r")
@@ -94,7 +94,7 @@ case class GWiggly(
                 } else if (r == this.dst) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
                     if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. just pairwise equal
-                            || filt.size > 2) {
+                            || filt.size >= 2) {
                         None
                     } else {
                         val s: Sigma = sigmas(this.op)
