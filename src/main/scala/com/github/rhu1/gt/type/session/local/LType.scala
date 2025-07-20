@@ -36,12 +36,18 @@ object LType {
 
     // x <: y -- x fastforward to y including under nested non-redex contexts
     def pre(x: LType, y: LType): Boolean = (x, y) match {
-        case (LBranch(s1, c1), LBranch(s2, c2)) =>
+        /*case (LBranch(s1, c1), LBranch(s2, c2)) =>
             s1 == s2 && c2.keySet.subsetOf(c1.keySet) &&  // !!! fast forward, not subtype -- branch/select same variance
                 c2.keySet.forall(k => pre(c1(k), c2(k)))
         case (LSelect(s1, c1), LSelect(s2, c2)) =>
             s1 == s2 && c1.keySet.subsetOf(c2.keySet) &&
-                c2.keySet.forall(k => pre(c1(k), c2(k)))
+                c2.keySet.forall(k => pre(c1(k), c2(k)))*/
+        case (LBranch(s1, c1), LBranch(s2, c2)) if c1.keySet == c2.keySet
+                || c2.keySet.size == 1 =>  // !!! fast forward, not subtype -- branch/select same variance
+            s1 == s2 && c2.keySet.forall(k => pre(c1(k), c2(k)))
+        case (LSelect(s1, c1), LSelect(s2, c2)) if c1.keySet == c2.keySet
+                || c2.keySet.size == 1 =>
+            s1 == s2 && c2.keySet.forall(k => pre(c1(k), c2(k)))
         case (LMixed(i1, l1, o1, r1), LMixed(i2, l2, o2, r2)) =>
             i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
         case (LActiveMixed(i1, l1, r1), LActiveMixed(i2, l2, r2)) =>
