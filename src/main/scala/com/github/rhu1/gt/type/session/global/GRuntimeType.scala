@@ -70,12 +70,14 @@ case class GWiggly(
     /* ... */
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
+        //println(s"eeee1: $r ,, $this")
         for {
             (cases, sigmas) <-
                 this.cases.foldLeft
                     (Option[(ListMap[(Op, Payload), LType], ListMap[Op, Sigma])](ListMap.empty, ListMap.empty)) {
                        case (None, _) => None
                        case (Some(acc), (k, g)) =>
+                           //println(s"ffff: $r ,, $k ,, $this")
                            g.rprojectAux(all, pi, r)
                             .map((L, q) => (acc._1 + ((k, L)), acc._2 + (k._1 -> q)))
                    }
@@ -83,38 +85,53 @@ case class GWiggly(
             res <-
                 if (r == this.src) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
-                    //println(s"eeee1: $r ,, $filt")
+                    //println(s"eeee2: $r ,, $filt")
                     if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. not checked
                             || filt.size >= 2) {
                         None
                     } else {
-                        //println(s"eeee2: $r")
+                        //println(s"eeee3: $r")
                         Some((cases(head._1), sigmas(this.op)))
                     }
                 } else if (r == this.dst) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
+                    //println(s"eeee4: $r $filt")
                     if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. just pairwise equal
                             || filt.size >= 2) {
                         None
                     } else {
                         val s: Sigma = sigmas(this.op)
+                        //println(s"eeee5: $r ,, $s ,, ${this.src}")
                         if (s.contains(this.src)) {
                             val s1: Sigma = s +
                                 (this.src -> (Msg(this.op, head._1._2, pi) :: s(this.src)))  // Empty already guarded
+                            //println(s"eeee6: $r ,, ${LBranch(this.src, cases)}")
                             Some((LBranch(this.src, cases), s1))
                         } else {
                             None
                         }
                     }
                 } else {
+                    //println(s"eeee7: $r ,, $this\n\t$cases\n\t$sigmas")
                     for {
-                        cc <- cases.values.tail.foldLeft(Option(cases.values.head)) {  // cases non-empty
+                        /*cc <- cases.values.tail.foldLeft(Option(cases.values.head)) {  // cases non-empty
                             case (None, _) => None
-                            case (Some(acc), x) => LType.merge(acc, x)
-                        }
-                        ss <- sigmas.values.tail.foldLeft(Option(sigmas.values.head)) {
-                            case (None, _) => None
-                            case (Some(acc), x) => LType.mergeSigma(acc, x)  // !!! cf. defs
+                            case (Some(acc), x) => LType.runtimeMerge(acc, x)  // !!! runtimeMerge
+                        }*/
+                        /*//ss <- sigmas.values.tail.foldLeft(Option(sigmas.values.head)) {
+                          //  case (None, _) => None
+                          //  case (Some(acc), x) => LType.mergeSigma(acc, x)  // !!! cf. defs*/
+                        cc1 <- cases.find { case ((op, _), _) => op == this.op }  // !!! merge not preserved during runtime, cf. OnlineWallet
+                        cc = cc1._2
+                        ss <- {
+                            val filt = sigmas.filter((k, _) => k != this.op).values.toSet  // !!! sigma_k, cf. defs
+                            //println(s"eeee8: $r $filt")
+                            if ((filt.size == 1 && !filt.head.isEmptyQueues) // !!! all non this.op cases if any, cf. just pairwise equal
+                                || filt.size >= 2) {
+                                None
+                            } else {
+                                Some(sigmas(this.op))
+                            }
                         }
                     } yield (cc, ss)
                 }
@@ -220,7 +237,7 @@ class GActiveMixed(
     /* ... */
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
-        println(s"bbbbb1: $r ,, $this")
+        //println(s"bbbbb1: $r ,, $this")
         if (this.comL contains r) {
             //println(s"ccccc1: $this ,, $r")
             this.left.rprojectAux(all, pi :+ pL, r) map {
@@ -234,11 +251,11 @@ class GActiveMixed(
         } else {
             for {
                left <- {
-                   println(s"bbbbb2: ${this.left.rprojectAux(all, pi :+ pL, r)}");
+                   //println(s"bbbbb2: ${this.left.rprojectAux(all, pi :+ pL, r)}");
                    this.left.rprojectAux(all, pi :+ pL, r)
                }
                right <- {
-                   println(s"bbbbb3: ${this.right.rprojectAux(all, pi :+ pR, r)}");
+                   //println(s"bbbbb3: ${this.right.rprojectAux(all, pi :+ pR, r)}");
                    this.right.rprojectAux(all, pi :+ pR, r)
                }
                s <- {

@@ -94,7 +94,7 @@ trait GType extends SType {
         for {
             ps <- all.foldLeft(Option[Map[Role, Participant]](Map.empty)) {
                 case (Some(acc), r) =>
-                    //println(s"aaaaa: $this ,, $r")
+                    //println(s"aaaaa: $r ,, $this")
                     rproject(all, r).map((L, q) => acc + (r -> Participant(r, rcom(r), L, q)))  // Handles end and equiv. ended-MCs
                 case _ => None
             }

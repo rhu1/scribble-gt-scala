@@ -62,22 +62,41 @@ object LType {
         if (x == y) {
             Some(x)
         } else {
+            //println(s"mmmmm1:\n\t$x\n\t$y")
             (x, y) match {
                 case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
-                    if (src1 == src2 && cases1.keySet.intersect(cases2.keySet).isEmpty) {
+                    if (src1 == src2
+                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // HERE TODO relax, check intersect identity
                         Some(LBranch(src1, cases1 ++ cases2))
                     } else {
                         None
                     }
-                case (LRec(rvar1, body1), LRec(rvar2, body2)) =>
-                    if (rvar1 == rvar2) {
-                        merge(body1, body2).map(z => LRec(rvar1, z))
-                    } else {
-                        None
-                    }
+                case (LRec(rvar1, body1), LRec(rvar2, body2)) if (rvar1 == rvar2) =>
+                    merge(body1, body2).map(z => LRec(rvar1, z))
                 case _ => None  // !!! no MC cases
             }
         }
+
+    /*def runtimeMerge(x: LType, y: LType): Option[LType] =
+        if (x == y) {
+            Some(x)
+        } else {
+            println(s"mmmmm2:\n\t$x\n\t$y")
+            (x, y) match {
+                case (_, LEnd) => Some(LEnd)  // XXX not general, cf. OnlineWallet (need to merge Sel/Bra...) => need regular choice committment to distinguish third-party wiggly cases of merge versus committed
+                case (LEnd, _) => Some(LEnd)
+                case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
+                    if (src1 == src2
+                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // HERE TODO relax, check intersect identity
+                        Some(LBranch(src1, cases1 ++ cases2))
+                    } else {
+                        None
+                    }
+                case (LRec(rvar1, body1), LRec(rvar2, body2)) if (rvar1 == rvar2) =>
+                    merge(body1, body2).map(z => LRec(rvar1, z))
+                case _ => None  // !!! no MC cases
+            }
+        }*/
 
     def mergeSigma(x: Sigma, y: Sigma): Option[Sigma] = if (x == y) Some(x) else None
 }
