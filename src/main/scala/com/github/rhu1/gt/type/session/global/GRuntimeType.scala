@@ -83,12 +83,12 @@ case class GWiggly(
             res <-
                 if (r == this.src) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
-                    println(s"eeee1: $r ,, $filt")
+                    //println(s"eeee1: $r ,, $filt")
                     if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. not checked
                             || filt.size >= 2) {
                         None
                     } else {
-                        println(s"eeee2: $r")
+                        //println(s"eeee2: $r")
                         Some((cases(head._1), sigmas(this.op)))
                     }
                 } else if (r == this.dst) {
@@ -220,25 +220,25 @@ class GActiveMixed(
     /* ... */
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
-        println(s"bbbbb1: $this ,, $r")
+        println(s"bbbbb1: $r ,, $this")
         if (this.comL contains r) {
-            println(s"ccccc1: $this ,, $r")
+            //println(s"ccccc1: $this ,, $r")
             this.left.rprojectAux(all, pi :+ pL, r) map {
                 case (_L, q) => (LActiveLeft(this.id, _L), q)
             }
         } else if (this.comR contains r) {
-            println(s"ccccc2: $this ,, $r")
+            //println(s"ccccc2: $this ,, $r")
             this.right.rprojectAux(all, pi :+ pR, r) map {
                 case (_L, q) => (LActiveRight(this.id, _L), q)
             }
         } else {
             for {
                left <- {
-                   //println(s"bbbbb2: ${this.left.rprojectAux(all, pi :+ pL, r)}");
+                   println(s"bbbbb2: ${this.left.rprojectAux(all, pi :+ pL, r)}");
                    this.left.rprojectAux(all, pi :+ pL, r)
                }
                right <- {
-                   //println(s"bbbbb3: ${this.right.rprojectAux(all, pi :+ pR, r)}");
+                   println(s"bbbbb3: ${this.right.rprojectAux(all, pi :+ pR, r)}");
                    this.right.rprojectAux(all, pi :+ pR, r)
                }
                s <- {
@@ -246,9 +246,30 @@ class GActiveMixed(
                    left._2 circ right._2
                }
             } yield (
-                LActiveMixed(this.id, left._1, this.obs, right._1), s)
+                LActiveMixed(this.id, left._1, right._1), s)
         }
 
+    /*protected def inferPeer(x: LType): Role =
+        x match {
+            case x: LSelect => x.dst
+            case x: LBranch => x.src
+            case x: LMixed =>
+                (inferPeer(x.left), inferPeer(x.right)) match {
+                    case (l, r) if l == r => l
+                    case (l, r) => throw new RuntimeException(s"Shouldn't get here l=$l, r=$r in: $x")
+                }
+            case x: LActiveMixed =>
+                (inferPeer(x.left), inferPeer(x.right)) match {
+                    case (l, r) if l == r => l
+                    case (l, r) => throw new RuntimeException(s"Shouldn't get here l=$l, r=$r in: $x")
+                }
+            case x: LActiveLeft => inferPeer(x.left)
+            case x: LActiveRight => inferPeer(x.right)
+            case x: LRec => inferPeer(x.unfold)
+            case x: LRecVar => throw new RuntimeException(s"Shouldn't get here: $x")
+            case LEnd => ???  // XXX cannot infer directly
+            _ => throw new RuntimeException(s"Shouldn't get here: $x")
+        }*/
 
     /* ... */
 

@@ -53,7 +53,7 @@ global protocol Proto1(role A, role B, role C) {
 }
 //*/
 
-/* // Testing step
+/* // Testing step, pre
 global protocol Proto1(role A, role B) {
     rec X {
         choice at A {
@@ -67,7 +67,22 @@ global protocol Proto1(role A, role B) {
 }
 //*/
 
-/* // Testing step
+/* // Testing sim
+global protocol Proto1(role A, role B) {
+    rec X {
+        choice at A {
+            1() from A to B;
+            2() from B to A;
+            continue X;
+        } or {
+            3() from A to B;
+            continue X;
+        }
+    }
+}
+//*/
+
+/* // Testing step, pre, sim
 global protocol Proto1(role A, role B) {
     rec X {
         mixed {
@@ -77,6 +92,49 @@ global protocol Proto1(role A, role B) {
         } or A->B {
             3() from B to A;
         }
+    }
+}
+//*/
+
+/* // Testing step, pre, sim
+global protocol Proto1(role A, role B) {
+    rec X {
+        mixed {
+            1() from A to B;
+            2() from B to A;
+        } or A->B {
+            3() from B to A;
+            continue X;
+        }
+    }
+}
+//*/
+
+/* // Testing step, pre, sim
+global protocol Proto1(role A, role B) {
+    rec X {
+        mixed {
+            1() from A to B;
+            2() from B to A;
+            continue X;
+        } or A->B {
+            3() from B to A;
+            continue X;
+        }
+    }
+}
+//*/
+
+/* ...Calc -- testing runtime projection MC (MP obs) */
+
+//* // Testing pre, sim
+global protocol Proto1(role A, role B, role C) {
+    choice at A {
+        1() from A to B;
+        2() from B to C;
+    } or {
+        3() from A to B;
+        4() from B to C;
     }
 }
 //*/

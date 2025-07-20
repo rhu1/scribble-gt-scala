@@ -34,24 +34,25 @@ trait LType extends SType {
 
 object LType {
 
-    // x <: y
+    // x <: y -- x fastforward to y including under nested non-redex contexts
     def pre(x: LType, y: LType): Boolean = (x, y) match {
         case (LBranch(s1, c1), LBranch(s2, c2)) =>
-            s1 == s2 && c1.keySet == c2.keySet &&
-                c1.keySet.forall(k => pre(c1(k), c2(k)))
+            s1 == s2 && c2.keySet.subsetOf(c1.keySet) &&  // !!! fast forward, not subtype -- branch/select same variance
+                c2.keySet.forall(k => pre(c1(k), c2(k)))
         case (LSelect(s1, c1), LSelect(s2, c2)) =>
-            s1 == s2 && c1.keySet == c2.keySet &&
-                c1.keySet.forall(k => pre(c1(k), c2(k)))
+            s1 == s2 && c1.keySet.subsetOf(c2.keySet) &&
+                c2.keySet.forall(k => pre(c1(k), c2(k)))
         case (LMixed(i1, l1, o1, r1), LMixed(i2, l2, o2, r2)) =>
             i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
-        case (LActiveMixed(i1, l1, o1, r1), LActiveMixed(i2, l2, o2, r2)) =>
-            i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
-        case (LMixed(i1, l1, o1, r1), LActiveMixed(i2, l2, o2, r2)) =>
-            i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
+        case (LActiveMixed(i1, l1, r1), LActiveMixed(i2, l2, r2)) =>
+            i1 == i2 && pre(l1, l2) && pre(r1, r2)
+        case (LMixed(i1, l1, o1, r1), LActiveMixed(i2, l2, r2)) =>
+            i1 == i2 && pre(l1, l2) && pre(r1, r2)
         case (LActiveLeft(i1, l1), LActiveLeft(i2, l2)) => i1 == i2 && pre(l1, l2)
         case (LActiveRight(i1, r1), LActiveRight(i2, r2)) => i1 == i2 && pre(r1, r2)
-        case (LRec(v1, b1), LRec(v2, b2)) => v1 == v2 && pre(b1, b2)
-        case (LRec(v1, b1), _) => pre(LRec(v1, b1).unfold, y)
+        case (LRec(v1, b1), LRec(v2, b2)) =>
+            (v1 == v2 && pre(b1, b2)) || pre(x.unfold, y)  // this direction of unfold only for FF
+        case (LRec(v1, b1), _) => pre(x.unfold, y)
         case (LRecVar(v1), LRecVar(v2)) => v1 == v2
         case (LEnd, LEnd) => true
         case _ => false
@@ -182,7 +183,7 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
         val err = s"Cannot step $a in: ($env, $this, $q)"
         a match {
             case LNu(pi, subj, c) if pi == env && c == this.id =>
-                Right((pi, LActiveMixed(this.id, this.left, this.obs, this.right), q))
+                Right((pi, LActiveMixed(this.id, this.left, this.right), q))
             case _ => Left(err)
         }
 
@@ -195,12 +196,13 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
 }
 
 // Active but not committed
-case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
+case class LActiveMixed(id: Mid, left: LType, //obs: Role,  // Unnecessary and awkward for runtime projection (e.g., end cases)
+        right: LType) extends LType {
 
     /* ... */
 
     override def subs(x: Map[RecVar, LType]): LActiveMixed =
-        LActiveMixed(this.id, this.left.subs(x), this.obs, this.right.subs(x))
+        LActiveMixed(this.id, this.left.subs(x), this.right.subs(x))
 
     /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
         LActiveMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))*/
@@ -226,7 +228,7 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
                 val right = this.right.step(com, env :+ pR, a, q)
                 (left, right) match {
                     case (Right(pi1, l1, q1), Left(_)) =>   // LSnd  // pi1 == a.pi
-                        Right((pi1, LActiveMixed(this.id, l1, this.obs, this.right), q1))
+                        Right((pi1, LActiveMixed(this.id, l1, this.right), q1))
                     case (Left(_), Right(pi1, l1, q1)) =>  // RSnd   // pi1 == a.pi
                         Right((pi1, LActiveRight(this.id, l1), q1))
                     case _ => Left(err)
@@ -239,7 +241,7 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
                         if (com(this.id) contains op) {
                             Right((pi1, LActiveLeft(this.id, l1), q1))
                         } else {  // LRcv2
-                            Right((pi1, LActiveMixed(this.id, l1, this.obs, this.right), q1))
+                            Right((pi1, LActiveMixed(this.id, l1, this.right), q1))
                         }
                     case (Left(_), Right(pi1, l1, q1)) =>  // RRcv -- subj == src == this.obs, pi1 == a.pi
                         Right((pi1, LActiveRight(this.id, l1), q1))
@@ -250,9 +252,9 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
                 val right = this.right.step(com, env :+ pR, a, q)
                 (left, right) match {
                     case (Right(pi1, l1, q1), Left(_)) =>  // pi1 == a.pi
-                        Right((pi1, LActiveMixed(this.id, l1, this.obs, this.right), q1))
+                        Right((pi1, LActiveMixed(this.id, l1, this.right), q1))
                     case (Left(_), Right(pi1, l1, q1)) =>  // pi1 == a.pi
-                        Right((pi1, LActiveMixed(this.id, this.left, this.obs, l1), q1))
+                        Right((pi1, LActiveMixed(this.id, this.left, l1), q1))
                     case _ => Left(err)
                 }
         }
@@ -262,7 +264,7 @@ case class LActiveMixed(id: Mid, left: LType, obs: Role, right: LType) extends L
     /* ... */
 
     override def toString: String =
-        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id}_${this.obs} ${this.right}]"
+        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id} ${this.right}]"
 }
 
 // !!! no obs -- ...also LActiveMixed ?

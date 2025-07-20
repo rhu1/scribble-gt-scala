@@ -65,14 +65,14 @@ object Msg {
             case _: pL.type => L match {
                 case LActiveRight(_, _) => true
                 case LActiveLeft(_, x) => isStaleAux(t, x)
-                case LActiveMixed(_, x, _, _) => isStaleAux(t, x)
+                case LActiveMixed(_, x, _) => isStaleAux(t, x)
                 case _ => false
             }
             //case pL() => L match {
             case _: pR.type => L match {
                 case LActiveLeft(_, _) => true
                 case LActiveRight(_, x) => isStaleAux(t, x)
-                case LActiveMixed(_, _, _, x) => isStaleAux(t, x)
+                case LActiveMixed(_, _, x) => isStaleAux(t, x)
                 case _ => false
             }
         }
@@ -179,7 +179,8 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
 
     def pre(x: LSystem): Boolean =
         println(s"\n2222:\n$this\n$x\n")
-        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => { println(s"3333: $r ${Y.pre(x.ps(r))}"); Y.pre(x.ps(r)) })
+        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => { println(s"3333: $r ${Y.pre(x.ps(r))}");
+            Y.pre(x.ps(r)) })
 
     override def toString: String =
         val ps = this.ps.mkString("\n\t")
