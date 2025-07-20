@@ -85,17 +85,15 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
         for {
             aY <- a match {
                 case x: GIO => Right(x.toLAction(x.subj))
-                case x: GNu => aYs.find(_.isInstanceOf[LNu]).toRight("a" + err)  // just pick one, <: will do any others
+                case x: GNu => aYs.find(_.isInstanceOf[LNu]).toRight("aaaa" + err)  // just pick one, <: will do any others
             }
             G1 <- this.G.stepPi(a)
             Y1 <- this.Y.stepPi(aY).map((Y, pi) => (Y.gcAll, pi))
-            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("b" + err)
+            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("bbbb" + err)
             res <- Either.cond(Y1._1.pre(_YG) && G1._2 == Y1._2,
                 (ComSim(G1._1, _YG), G1._2),
-                "c" + err)
+                "cccc" + err)
         } yield res
-
-    //foo <- Right(Y1._1.pre(_YG))
 
     override def isSafeTermination: Boolean = this.G.isSafeTermination && this.Y.isSafeTermination
 
@@ -103,5 +101,39 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
 
     override def toString: String = s"ComSim(\n\tG=${this.G.G}\n\tY=${this.Y})"
 }
+
+
+/* ... */
+
+case class FidSim(G: GSystem, Y: LSystem) extends SSystem[FidSim, LAction] {
+
+    override def getActions: Set[LAction] =
+        val aYs = this.Y.getActions
+        val aGs = this.G.getActions
+        def ok(x: YAction): Boolean = x match {
+            case x: LAction => aGs.contains(x.toGAction)
+            case _ => throw new RuntimeException(s"Shouldn't get here $x")  // Y already gc'd (LRho)
+        }
+        if (aYs.forall(x => ok(x))) aYs.map(_.asInstanceOf[LAction]) else Set.empty
+
+    override def stepPi(a: LAction): Either[String, (FidSim, Path)] =
+        val aG = a.toGAction
+        val err = s"Cannot step $a in: $this"
+        for {
+            Y1 <- this.Y.stepPi(a).map((Y, pi) => (Y.gcAll, pi))
+            G1 <- this.G.stepPi(aG)
+            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("dddd" + err)
+            res <- Either.cond(Y1._1.pre(_YG) && G1._2 == Y1._2,
+                (FidSim(G1._1, _YG), G1._2),
+                "eeee" + err)
+        } yield res
+
+    override def isSafeTermination: Boolean = this.G.isSafeTermination && this.Y.isSafeTermination
+
+    override def run(): Unit = SSystem.run(this)
+
+    override def toString: String = s"ComSim(\n\tG=${this.G.G}\n\tY=${this.Y})"
+}
+
 
 

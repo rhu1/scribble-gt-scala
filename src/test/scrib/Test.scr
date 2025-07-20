@@ -82,7 +82,7 @@ global protocol Proto1(role A, role B) {
 }
 //*/
 
-/* // Testing step, pre, sim
+//* // Testing step, pre, sim
 global protocol Proto1(role A, role B) {
     rec X {
         mixed {
@@ -185,7 +185,7 @@ global protocol Proto1(role A, role B, role C) {
 }
 //*/
 
-//* // Testing runtime projection/merge, sim
+/* // Testing runtime projection/merge, sim
 global protocol Proto1(role A, role B, role C) {
     rec X {
         choice at A {

@@ -1,6 +1,7 @@
 package com.github.rhu1.gt.`type`.session.local
 
 import com.github.rhu1.gt.`type`.session.*
+import com.github.rhu1.gt.`type`.session.global.{GAction, GNu, GRecv, GSend}
 
 import scala.annotation.tailrec
 
@@ -11,7 +12,9 @@ case class LRho(subj: Role) extends YAction {
     val pi = EPSILON
 }
 
-sealed trait LAction extends YAction { }
+sealed trait LAction extends YAction { 
+    def toGAction: GAction
+}
 
 // Same as GIO
 sealed abstract class LIO extends LAction {
@@ -23,16 +26,20 @@ sealed abstract class LIO extends LAction {
 
 case class LSend(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends LIO {
     val subj: Role = src
+    override def toGAction: GSend = GSend(this.pi, this.src, this.dst, this.op, this.pay)
     override def toString: String = s"$src!$dst:${Msg(op, pay, pi).toString}"
 }
 
 case class LRecv(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends LIO {
     val subj: Role = dst
+    override def toGAction: GRecv = GRecv(this.pi, this.src, this.dst, this.op, this.pay)
     override def toString: String = s"$src?$dst:${Msg(op, pay, pi).toString}"  // pq?a -- p is sender
 }
 
 // !!! subj and c
-case class LNu(pi: Path, subj: Role, c: Mid) extends LAction {}
+case class LNu(pi: Path, subj: Role, c: Mid) extends LAction {
+    override def toGAction: GNu = GNu(this.pi, this.c)
+}
 
 
 /* ... */

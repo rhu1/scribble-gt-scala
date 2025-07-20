@@ -2,7 +2,7 @@ package com.github.rhu1.gt.main
 
 import com.github.rhu1.gt.*
 import com.github.rhu1.gt.`type`.session.*
-import com.github.rhu1.gt.`type`.session.global.{ComSim, GSystem, GType, Scrib2GT}
+import com.github.rhu1.gt.`type`.session.global.{ComSim, FidSim, GSystem, GType, Scrib2GT}
 import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
@@ -51,11 +51,11 @@ object Main {
             }
         })
 
-        println("\n[GT] Stepping global:\n")
+        /*println("\n[GT] Stepping global:\n")
         for ((n, _G) <- translated) {
             val Gsys = GSystem(_G.getRoleCommitting, _G)
             Gsys.run()
-        }
+        }*/
 
         println("\n[GT] Projecting:\n")
         val projected = translated.map((n, G) => (
@@ -66,14 +66,20 @@ object Main {
         ))
         projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
 
-        println("\n[GT] Stepping local:\n")
+        /*println("\n[GT] Stepping local:\n")
         for ((n, rL) <- projected) {
             val Y = toLSystem(n, translated(n), projected(n))
             //println(Y)
             Y.run()
+        }*/
+
+        println("\n[GT] Stepping fidelity:\n")
+        for ((n, _G) <- translated) {
+            val sim = FidSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
+            sim.run()
         }
 
-        println("\n[GT] Stepping completeness simulation:\n")
+        println("\n[GT] Stepping completeness:\n")
         for ((n, _G) <- translated) {
             val sim = ComSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
             sim.run()
