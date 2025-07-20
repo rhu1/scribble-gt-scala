@@ -127,7 +127,7 @@ global protocol Proto1(role A, role B) {
 
 /* ...Calc -- testing runtime projection MC (MP obs) */
 
-//* // Testing pre, sim
+/* // Testing pre, sim
 global protocol Proto1(role A, role B, role C) {
     choice at A {
         1() from A to B;
@@ -135,6 +135,68 @@ global protocol Proto1(role A, role B, role C) {
     } or {
         3() from A to B;
         4() from B to C;
+    }
+}
+//*/
+
+/* ...OnlineWallet -- testing runtime wiggly projection/merge */
+
+/* // Testing sim
+global protocol Proto1(role A, role B, role C) {
+    rec X {
+        choice at A {
+            1() from A to B;
+            2() from B to C;
+            continue X;
+        } or {
+            3() from A to B;
+            4() from B to C;
+        }
+    }
+}
+//*/
+
+/* // Testing sim
+global protocol Proto1(role A, role B, role C) {
+    rec X {
+        choice at A {
+            1() from A to B;
+            2() from B to C;
+            continue X;
+        } or {
+            3() from A to B;
+            4() from B to C;
+            continue X;
+        }
+    }
+}
+//*/
+
+/* // Testing runtime projection/merge, sim
+global protocol Proto1(role A, role B, role C) {
+    choice at A {
+        1() from A to B;
+        2() from A to C;
+        3() from C to B;
+    } or {
+        3() from A to B;
+        4() from A to C;
+    }
+}
+//*/
+
+//* // Testing runtime projection/merge, sim
+global protocol Proto1(role A, role B, role C) {
+    rec X {
+        choice at A {
+            1() from A to B;
+            2() from A to C;
+            3() from C to B;
+            continue X;
+        } or {
+            3() from A to B;
+            4() from A to C;
+        }
     }
 }
 //*/
