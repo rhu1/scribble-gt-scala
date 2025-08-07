@@ -7,6 +7,7 @@ import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
+import org.scribble.ext.gt.core.model.efsm.GTVState
 
 import scala.jdk.CollectionConverters.*
 
@@ -67,13 +68,13 @@ object Main {
         projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
 
         /*println("\n[GT] Stepping local:\n")
-        for ((n, rL) <- projected) {
+        for ((n, _) <- projected) {
             val Y = toLSystem(n, translated(n), projected(n))
             //println(Y)
             Y.run()
         }*/
 
-        println("\n[GT] Stepping fidelity:\n")
+        /*println("\n[GT] Stepping fidelity:\n")
         for ((n, _G) <- translated) {
             val sim = FidSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
             sim.run()
@@ -83,6 +84,17 @@ object Main {
         for ((n, _G) <- translated) {
             val sim = ComSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
             sim.run()
+        }*/
+
+        println("\n[GT] Constructing EFSM:\n")
+        for ((n, rL) <- projected) {
+            val rcom = translated(n).getRoleCommitting
+            for ((r, _L) <- rL) {
+                val s_init = new GTVState(GTVState.TOP_SCOPE)
+                val end = new GTVState(GTVState.TOP_SCOPE)
+                val efsm = _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end)
+                println(s"r: $efsm")
+            }
         }
     }
 
