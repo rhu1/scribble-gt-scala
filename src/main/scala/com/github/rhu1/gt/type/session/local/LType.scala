@@ -2,11 +2,10 @@ package com.github.rhu1.gt.`type`.session.local
 
 import com.github.rhu1.gt.`type`.session
 import com.github.rhu1.gt.`type`.session.*
-import com.github.rhu1.gt.`type`.session.global.Scrib2GT
 import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 import org.scribble.core.`type`.name.DataName
-import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVRecVar, GTVState}
-import org.scribble.ext.gt.core.model.efsm.event.{GTVAction, GTVEpsilon, GTVEpsilonStar, GTVEvent, GTVRecv, GTVSend, GTVTau}
+import org.scribble.ext.gt.core.model.efsm.event.*
+import org.scribble.ext.gt.core.model.efsm.{GTVRecVar, GTVState}
 
 import scala.collection.immutable.ListMap
 import scala.jdk.CollectionConverters.*
@@ -331,6 +330,101 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
 
     /* ... */
 
+    override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
+               c: Mid, s: GTVState, end: GTVState): EFSM = getKind match {
+            case INTERNAL => constructInternal(r, com, recvStars, c, s, end)
+            case EXTERNAL_OI => constructExternal(r, com, recvStars, c, s, end)
+            case EXTERNAL_II => constructExternal(r, com, recvStars, c, s, end)
+        }
+
+    // No consideration of "nested interrupt edges" due to observer immediately committing on both left/right
+    protected def constructInternal(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
+            c: Mid, s: GTVState, end: GTVState): EFSM = {
+        val left = this.left.asInstanceOf[LBranch]
+        val right = this.right.asInstanceOf[LSelect]
+
+        val cases_right = right.cases.map {
+            case ((op, pay), _L) => (op, (pay, _L.construct(r, com, recvStars, this.id, new GTVState(this.id), end)))
+        }
+
+        val s1 = new GTVState(true, this.id, s.recvars)
+        val m_left = left.construct(r, com, recvStars, this.id, s1, end)
+        val init = m_left.init
+        val S = m_left.S.clone()
+        val E = m_left.E.clone()
+        val A = m_left.A.clone()
+        val delta = m_left.delta.map { case (k, v) => (k, v.clone()) }
+        for ((op_right, (pay, m_right)) <- cases_right) {
+            S.addAll(m_right.S)
+            E.addAll(m_right.E)
+            A.addAll(m_right.A)
+
+            val a = new GTVSendStar(LType.convertRole(right.dst), LType.convertOp(op_right), LType.convertPay(pay))
+            for (((op_left, _), _) <- left.cases) {
+                val e = new GTVRecv(LType.convertRole(left.src), LType.convertOp(op_left), LType.convertPay(left.getPay(op_left)))
+                val tmp2 = delta.getOrElseUpdate((init, e), scala.collection.mutable.LinkedHashSet.empty)
+                tmp2.add((a, m_right.init))
+            }
+
+            val tmp3 = scala.collection.mutable.LinkedHashSet.empty[(GTVAction, GTVState)]
+            tmp3.add((a, m_right.init))
+            val tau = new GTVTau(LType.convertOp(op_right))
+            delta.put((init, tau), tmp3)
+
+            for ((k, v) <- m_right.delta) {
+                val tmp2 = delta.getOrElseUpdate(k, scala.collection.mutable.LinkedHashSet.empty)
+                tmp2.addAll(v)
+            }
+        }
+
+        LMixed.drawExternals(recvStars, init, delta)
+        EFSM(S, init, E, A, delta)
+    }
+
+    protected def constructExternal(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
+            c: Mid, s: GTVState, end: GTVState): EFSM = {
+        val left = this.left
+        val right = this.right.asInstanceOf[LBranch]
+
+        val cases_right = right.cases.map {
+            case ((op, _), _L) => (op, _L.construct(r, com, recvStars, this.id, new GTVState(this.id), end))
+        }
+
+        val leftStars = scala.collection.mutable.HashMap(recvStars.toSeq: _*)
+        val op = cases_right.keySet.iterator.next // !!! right.cases.size() == 1
+
+        leftStars.put(this.id, (new GTVRecv(LType.convertRole(right.src), LType.convertOp(op), LType.convertPay(right.getPay(op))), cases_right(op).init))
+        val s1 = new GTVState(true, this.id, s.recvars)
+        val m_left = left.construct(r, com, leftStars.toMap, this.id, s1, end)
+
+        val init = m_left.init
+        val S = m_left.S.clone()
+        val E = m_left.E.clone()
+        val A = m_left.A.clone()
+        val delta = m_left.delta.map { case (k, v) => (k, v.clone()) }
+        for ((_, m_right) <- cases_right) {
+            S.addAll(m_right.S)
+            E.addAll(m_right.E)
+            A.addAll(m_right.A)
+            for ((k, v) <- m_right.delta) {
+                val tmp2 = delta.getOrElseUpdate(k, scala.collection.mutable.LinkedHashSet.empty)
+                tmp2.addAll(v)
+            }
+        }
+
+        LMixed.drawExternals(recvStars, init, delta)
+        EFSM(S, init, E, A, delta)
+    }
+
+    protected def getKind: MixedKind = (this.left, this.right) match {
+        case (x: LBranch, y: LSelect) => INTERNAL
+        case (x: LSelect, y: LBranch) => EXTERNAL_OI
+        case (x: LBranch, y: LBranch) => EXTERNAL_II
+        case _ => throw new RuntimeException(s"EFSM construction not supported by this implementation: $this")
+    }
+
+    /* ... */
+
     override def getActions(subj: Role, env: Path, q: Sigma): Set[LAction] =
         Set(LNu(env, subj, this.id))
 
@@ -350,6 +444,11 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
     override def toString: String =
         s"[${this.left} ${ConsoleColours.WHITE_TRIANGLE}${id}_${this.obs} ${this.right}]"
 }
+
+sealed trait MixedKind {}
+object INTERNAL extends MixedKind {}
+object EXTERNAL_OI extends MixedKind {}
+object EXTERNAL_II extends MixedKind {}
 
 object LMixed {
 
