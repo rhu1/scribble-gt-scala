@@ -44,6 +44,25 @@ trait GType extends SType {
     protected[global] def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
     protected[global] def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
 
+    // Post: keySet == getLiveRoles
+    def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
+        val com = getCommitting
+        /*val s = com.toSeq.flatMap((c, rops) => rops.toSeq.map((r, ops) => (r, (c, ops))))
+        s.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
+            case (acc, (r, (c, ops))) =>
+                acc + (r -> (acc.getOrElse(r, Map.empty[Mid, Set[Op]]) + (c -> ops)))  // c's disjoint per r*/
+        val rcom = com.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
+            case (acc, (c, rops)) =>
+                (acc.keySet union rops.keySet).map(r => (
+                    r,
+                    { val gacc = acc.getOrElse(r, Map.empty[Mid, Set[Op]])
+                        val gcom = rops.getOrElse(r, Set.empty[Op])
+                        //gacc + (c -> (gacc.getOrElse(c, Set.empty[Op]) ++ gcom)) }  // getOrElse always empty for c
+                        gacc + (c -> gcom) }
+                )).toMap
+        }
+        getLiveRoles.map(r => (r, rcom.getOrElse(r, Map.empty[Mid, Set[Op]]))).toMap
+
     def isWellFormed: Boolean =
         def checkForIsect(x: Map[Role, Set[Op]], y: Map[Role, Set[Op]]): Boolean = {
             (x.keySet ++ y.keySet).exists(r => {
@@ -121,25 +140,6 @@ trait GType extends SType {
 
     /*def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
         = stepPi(com, EPSILON, a).map((G, _) => G)*/
-
-    // Post: keySet == getLiveRoles
-    def getRoleCommitting: Map[Role, Map[Mid, Set[Op]]] =
-        val com = getCommitting
-        /*val s = com.toSeq.flatMap((c, rops) => rops.toSeq.map((r, ops) => (r, (c, ops))))
-        s.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
-            case (acc, (r, (c, ops))) =>
-                acc + (r -> (acc.getOrElse(r, Map.empty[Mid, Set[Op]]) + (c -> ops)))  // c's disjoint per r*/
-        val rcom = com.foldLeft(Map.empty[Role, Map[Mid, Set[Op]]]) {
-            case (acc, (c, rops)) =>
-                (acc.keySet union rops.keySet).map(r => (
-                    r,
-                    { val gacc = acc.getOrElse(r, Map.empty[Mid, Set[Op]])
-                      val gcom = rops.getOrElse(r, Set.empty[Op])
-                      //gacc + (c -> (gacc.getOrElse(c, Set.empty[Op]) ++ gcom)) }  // getOrElse always empty for c
-                      gacc + (c -> gcom) }
-                )).toMap
-        }
-        getLiveRoles.map(r => (r, rcom.getOrElse(r, Map.empty[Mid, Set[Op]]))).toMap
 
     def isSafeTermination(all: Set[Role]): Boolean
 }
