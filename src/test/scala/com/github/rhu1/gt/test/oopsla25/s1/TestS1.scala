@@ -12,7 +12,7 @@ class TestS1 extends AnyFunSuite {
 
     test("mytest") {
         //assert(M)
-        TestUtil.testGood(TestUtil.BASE_PATH + "\\s1\\good\\Intro.scr")
+        TestUtil.testGood(TestUtil.BASE_PATH + "/s1/good/Intro.scr")
     }
 
 }
@@ -21,7 +21,7 @@ class TestS1 extends AnyFunSuite {
 
     @Test
     public void testIntro() {
-        //GTCommandLine2.main(new String[]{TestUtil.BASE_PATH + "\\s1\\good\\Intro.scr"});
-        TestUtil.testGood(TestUtil.BASE_PATH + "\\s1\\good\\Intro.scr");
+        //GTCommandLine2.main(new String[]{TestUtil.BASE_PATH + "/s1/good/Intro.scr"});
+        TestUtil.testGood(TestUtil.BASE_PATH + "/s1/good/Intro.scr");
     }
 }*/
