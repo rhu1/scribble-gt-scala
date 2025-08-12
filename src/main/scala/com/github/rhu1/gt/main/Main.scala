@@ -93,7 +93,7 @@ object Main {
                 val s_init = new GTVState(GTVState.TOP_SCOPE)
                 val end = new GTVState(GTVState.TOP_SCOPE)
                 val efsm = _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end)
-                println(s"r: $efsm")
+                println(s"$r: ${efsm.toGTEFSM.toDot}")
             }
         }
     }

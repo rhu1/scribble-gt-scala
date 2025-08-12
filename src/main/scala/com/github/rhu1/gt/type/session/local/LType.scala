@@ -5,27 +5,12 @@ import com.github.rhu1.gt.`type`.session.*
 import com.github.rhu1.gt.util.{ConsoleColours, PipeForwards}
 import org.scribble.core.`type`.name.DataName
 import org.scribble.ext.gt.core.model.efsm.event.*
-import org.scribble.ext.gt.core.model.efsm.{GTVRecVar, GTVState}
+import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVRecVar, GTVState}
+import org.scribble.util.Pair
 
 import scala.collection.immutable.ListMap
 import scala.jdk.CollectionConverters.*
 
-/*
-    public final Set<GTVState> S;
-    public final GTVState init;
-    public final Set<GTVEvent> E;
-    public final Set<GTVAction> A;
-    public final Map<
-            Pair<GTVState, GTVEvent>,
-            Set<Pair<GTVAction, GTVState>>> delta;
- */
-case class EFSM(
-       S: scala.collection.mutable.LinkedHashSet[GTVState],
-       init: GTVState,
-       E: scala.collection.mutable.LinkedHashSet[GTVEvent],
-       A: scala.collection.mutable.LinkedHashSet[GTVAction],
-       delta: scala.collection.mutable.LinkedHashMap[(GTVState, GTVEvent), scala.collection.mutable.LinkedHashSet[(GTVAction, GTVState)]]
-) {}
 
 trait LType extends SType {
 
@@ -714,4 +699,29 @@ object LEnd extends LType {
     override def toString: String = "end"
 }
 
+
+/* ... */
+
+//public final Set<GTVState> S;
+//public final GTVState init;
+//public final Set<GTVEvent> E;
+//public final Set<GTVAction> A;
+//public final Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction,  GTVState>>> delta;
+case class EFSM(
+       S: scala.collection.mutable.LinkedHashSet[GTVState],
+       init: GTVState,
+       E: scala.collection.mutable.LinkedHashSet[GTVEvent],
+       A: scala.collection.mutable.LinkedHashSet[GTVAction],
+       delta: scala.collection.mutable.LinkedHashMap[(GTVState, GTVEvent), scala.collection.mutable.LinkedHashSet[(GTVAction, GTVState)]]
+) {
+
+    def toGTEFSM: GTEFSM =
+        val S = this.S.asJava
+        val E = this.E.asJava;
+        val A = this.A.asJava;
+        val delta = this.delta.map { case ((s, e), v) => (new Pair(s, e), v.map((a, s1) => new Pair(a, s1)).asJava) }.asJava
+        new GTEFSM(S, this.init, E, A, delta)
+
+    //override def toString: String = s"(init=${this.init}, delta=${this.delta}"
+}
 
