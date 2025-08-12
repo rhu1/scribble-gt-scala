@@ -9,6 +9,7 @@ import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVRecVar, GTVState}
 import org.scribble.util.Pair
 
 import scala.collection.immutable.ListMap
+import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
 
@@ -162,10 +163,10 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
                   c: Mid, s: GTVState, end: GTVState): EFSM = {
-        val S = scala.collection.mutable.LinkedHashSet(s)
-        val E: scala.collection.mutable.LinkedHashSet[GTVEvent] = scala.collection.mutable.LinkedHashSet.empty
-        val A: scala.collection.mutable.LinkedHashSet[GTVAction] = scala.collection.mutable.LinkedHashSet.empty
-        val delta: scala.collection.mutable.LinkedHashMap[(GTVState, GTVEvent), scala.collection.mutable.LinkedHashSet[(GTVAction, GTVState)]] = scala.collection.mutable.LinkedHashMap.empty
+        val S = mutable.LinkedHashSet(s)
+        val E: mutable.LinkedHashSet[GTVEvent] = mutable.LinkedHashSet.empty
+        val A: mutable.LinkedHashSet[GTVAction] = mutable.LinkedHashSet.empty
+        val delta: mutable.LinkedHashMap[(GTVState, GTVEvent), mutable.LinkedHashSet[(GTVAction, GTVState)]] = mutable.LinkedHashMap.empty
 
         for (((op_i, _), succ_i) <- this.cases) {
             var stars: Map[Mid, (GTVRecv, GTVState)] = recvStars
@@ -182,10 +183,10 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
             val e = new GTVTau(LType.convertOp(op_i))
             val a = new GTVSend(LType.convertRole(this.dst), LType.convertOp(op_i), LType.convertPay(getPay(op_i)))
 
-            val tmp = delta.getOrElseUpdate((s, e), scala.collection.mutable.LinkedHashSet.empty)
+            val tmp = delta.getOrElseUpdate((s, e), mutable.LinkedHashSet.empty)
             tmp.add((a, m_i.init))
             for ((k, v) <- m_i.delta) {
-                val tmp2 = delta.getOrElseUpdate(k, scala.collection.mutable.LinkedHashSet.empty)
+                val tmp2 = delta.getOrElseUpdate(k, mutable.LinkedHashSet.empty)
                 tmp2.addAll(v)
             }
         }
@@ -235,10 +236,10 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
                   c: Mid, s: GTVState, end: GTVState): EFSM = {
-        val S = scala.collection.mutable.LinkedHashSet(s)
-        val E: scala.collection.mutable.LinkedHashSet[GTVEvent] = scala.collection.mutable.LinkedHashSet.empty
-        val A: scala.collection.mutable.LinkedHashSet[GTVAction] = scala.collection.mutable.LinkedHashSet.empty
-        val delta: scala.collection.mutable.LinkedHashMap[(GTVState, GTVEvent), scala.collection.mutable.LinkedHashSet[(GTVAction, GTVState)]] = scala.collection.mutable.LinkedHashMap.empty
+        val S = mutable.LinkedHashSet(s)
+        val E: mutable.LinkedHashSet[GTVEvent] = mutable.LinkedHashSet.empty
+        val A: mutable.LinkedHashSet[GTVAction] = mutable.LinkedHashSet.empty
+        val delta: mutable.LinkedHashMap[(GTVState, GTVEvent), mutable.LinkedHashSet[(GTVAction, GTVState)]] = mutable.LinkedHashMap.empty
 
         for (((op_i, _), succ_i) <- this.cases) {
             var stars: Map[Mid, (GTVRecv, GTVState)] = recvStars
@@ -254,10 +255,10 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
             A.addAll(m_i.A)
             val e = new GTVRecv(LType.convertRole(this.src), LType.convertOp(op_i), LType.convertPay(getPay(op_i)))
 
-            val tmp = delta.getOrElseUpdate((s, e), scala.collection.mutable.LinkedHashSet.empty)
+            val tmp = delta.getOrElseUpdate((s, e), mutable.LinkedHashSet.empty)
             tmp.add((GTVEpsilon.EPSILON, m_i.init))
             for ((k, v) <- m_i.delta) {
-                val tmp2 = delta.getOrElseUpdate(k, scala.collection.mutable.LinkedHashSet.empty)
+                val tmp2 = delta.getOrElseUpdate(k, mutable.LinkedHashSet.empty)
                 tmp2.addAll(v)
             }
         }
@@ -347,17 +348,17 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
             val a = new GTVSendStar(LType.convertRole(right.dst), LType.convertOp(op_right), LType.convertPay(pay))
             for (((op_left, _), _) <- left.cases) {
                 val e = new GTVRecv(LType.convertRole(left.src), LType.convertOp(op_left), LType.convertPay(left.getPay(op_left)))
-                val tmp2 = delta.getOrElseUpdate((init, e), scala.collection.mutable.LinkedHashSet.empty)
+                val tmp2 = delta.getOrElseUpdate((init, e), mutable.LinkedHashSet.empty)
                 tmp2.add((a, m_right.init))
             }
 
-            val tmp3 = scala.collection.mutable.LinkedHashSet.empty[(GTVAction, GTVState)]
+            val tmp3 = mutable.LinkedHashSet.empty[(GTVAction, GTVState)]
             tmp3.add((a, m_right.init))
             val tau = new GTVTau(LType.convertOp(op_right))
             delta.put((init, tau), tmp3)
 
             for ((k, v) <- m_right.delta) {
-                val tmp2 = delta.getOrElseUpdate(k, scala.collection.mutable.LinkedHashSet.empty)
+                val tmp2 = delta.getOrElseUpdate(k, mutable.LinkedHashSet.empty)
                 tmp2.addAll(v)
             }
         }
@@ -375,7 +376,7 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
             case ((op, _), _L) => (op, _L.construct(r, com, recvStars, this.id, new GTVState(this.id), end))
         }
 
-        val leftStars = scala.collection.mutable.HashMap(recvStars.toSeq: _*)
+        val leftStars = mutable.HashMap(recvStars.toSeq: _*)
         val op = cases_right.keySet.iterator.next // !!! right.cases.size() == 1
 
         leftStars.put(this.id, (new GTVRecv(LType.convertRole(right.src), LType.convertOp(op), LType.convertPay(right.getPay(op))), cases_right(op).init))
@@ -392,7 +393,7 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
             E.addAll(m_right.E)
             A.addAll(m_right.A)
             for ((k, v) <- m_right.delta) {
-                val tmp2 = delta.getOrElseUpdate(k, scala.collection.mutable.LinkedHashSet.empty)
+                val tmp2 = delta.getOrElseUpdate(k, mutable.LinkedHashSet.empty)
                 tmp2.addAll(v)
             }
         }
@@ -438,9 +439,9 @@ object EXTERNAL_II extends MixedKind {}
 object LMixed {
 
     def drawExternals(recvStars: Map[Mid, (GTVRecv, GTVState)], init: GTVState,
-                                delta: scala.collection.mutable.LinkedHashMap[(GTVState, GTVEvent), scala.collection.mutable.LinkedHashSet[(GTVAction, GTVState)]]): Unit = {
+            delta: mutable.LinkedHashMap[(GTVState, GTVEvent), mutable.LinkedHashSet[(GTVAction, GTVState)]]): Unit = {
         for ((a, s) <- recvStars.values) {
-            val tmp = delta.getOrElseUpdate((init, a), scala.collection.mutable.LinkedHashSet.empty)
+            val tmp = delta.getOrElseUpdate((init, a), mutable.LinkedHashSet.empty)
             tmp.add((GTVEpsilonStar.EPSILON_STAR, s))
         }
     }
@@ -621,7 +622,7 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
                            c: Mid, s: GTVState, end: GTVState): EFSM =
         val recvars = s.recvars.asScala + LType.convertRecVar(this.rvar)
         val s1 = new GTVState(s.isEntry, c, recvars.asJava)
-        EFSM(scala.collection.mutable.LinkedHashSet(s1), s1, scala.collection.mutable.LinkedHashSet.empty, scala.collection.mutable.LinkedHashSet.empty, scala.collection.mutable.LinkedHashMap.empty)
+        EFSM(mutable.LinkedHashSet(s1), s1, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
 
     /* ... */
 
@@ -652,7 +653,7 @@ case class LRecVar(rvar: RecVar) extends LType {
     override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
                            c: Mid, s: GTVState, end: GTVState): EFSM =
         val s1 = new GTVRecVar(c, LType.convertRecVar(this.rvar))
-        EFSM(scala.collection.mutable.LinkedHashSet(s1), s1, scala.collection.mutable.LinkedHashSet.empty, scala.collection.mutable.LinkedHashSet.empty, scala.collection.mutable.LinkedHashMap.empty)
+        EFSM(mutable.LinkedHashSet(s1), s1, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
 
     /* ... */
 
@@ -682,7 +683,7 @@ object LEnd extends LType {
 
     override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
                   c: Mid, s: GTVState, end: GTVState): EFSM =
-        EFSM(scala.collection.mutable.LinkedHashSet(end), end, scala.collection.mutable.LinkedHashSet.empty, scala.collection.mutable.LinkedHashSet.empty, scala.collection.mutable.LinkedHashMap.empty)
+        EFSM(mutable.LinkedHashSet(end), end, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
 
     /* ... */
 
@@ -708,11 +709,11 @@ object LEnd extends LType {
 //public final Set<GTVAction> A;
 //public final Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction,  GTVState>>> delta;
 case class EFSM(
-       S: scala.collection.mutable.LinkedHashSet[GTVState],
+       S: mutable.LinkedHashSet[GTVState],
        init: GTVState,
-       E: scala.collection.mutable.LinkedHashSet[GTVEvent],
-       A: scala.collection.mutable.LinkedHashSet[GTVAction],
-       delta: scala.collection.mutable.LinkedHashMap[(GTVState, GTVEvent), scala.collection.mutable.LinkedHashSet[(GTVAction, GTVState)]]
+       E: mutable.LinkedHashSet[GTVEvent],
+       A: mutable.LinkedHashSet[GTVAction],
+       delta: mutable.LinkedHashMap[(GTVState, GTVEvent), mutable.LinkedHashSet[(GTVAction, GTVState)]]
 ) {
 
     def toGTEFSM: GTEFSM =
