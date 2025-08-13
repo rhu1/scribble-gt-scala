@@ -45,13 +45,13 @@ type Mid = Int
 sealed trait pLR {}
 
 object pL extends pLR {
-    def unapply(x: pLR): Boolean = true
+    def unapply(x: pLR): Boolean = x == this;  //x.instanceof[pL.type]
 
     override def toString: String = "l"
 }
 
 object pR extends pLR {
-    def unapply(x: pLR): Boolean = true
+    def unapply(x: pLR): Boolean = x == this
 
     override def toString: String = "r"
 }
