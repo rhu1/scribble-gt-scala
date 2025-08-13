@@ -2,13 +2,7 @@
  * N.B. in Eclipse do Package Explorer, right click -> Open With -> Java Editor at least once for .g file association and syntax highlighting to work properly
  * 
  * > scribble-java
- * $ java -cp scribble-parser/lib/antlr-3.5.2-complete.jar org.antlr.Tool -o scribble-gt/target/generated-sources/antlr3 scribble-gt/src/main/antlr3/org/scribble/parser/antlr/GTScribble.g
- * $ java -cp lib/antlr-3.5.2-complete.jar org.antlr.Tool -o src/main/resources/generated-sources/antlr3 src/main/antlr3/org/scribble/parser/antlr/GTScribble.g
- * 
- * Windows/Cygwin
- * > scribble-java
- * $ java -cp scribble-parser/lib/antlr-3.5.2-complete.jar org.antlr.Tool -o scribble-parser/target/generated-sources/antlr3/org/scribble/parser/antlr scribble-parser/src/main/antlr3/org/scribble/parser/antlr/Scribble.g
- * $ mv scribble-parser/target/generated-sources/antlr3/org/scribble/parser/antlr/Scribble.tokens scribble-parser/target/generated-sources/antlr3/
+ * $ java -cp lib/antlr-3.5.2-complete.jar org.antlr.Tool -o target/generated-sources/antlr3 src/main/antlr3/org/scribble/parser/antlr/GTScribble.g
  */
 
 /* * -- ** not allowed here.....
