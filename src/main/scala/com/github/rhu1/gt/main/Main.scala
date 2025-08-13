@@ -16,9 +16,15 @@ import scala.jdk.CollectionConverters.*
 // - balanced up-to
 
 trait CLArg {}
-object CheckFidelity extends CLArg {}
-object CheckCompleteness extends CLArg {}
-object PrintEFSMAll extends CLArg {}
+object CheckFidelity extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this //x.isInstanceOf[CheckFidelity.type]
+}
+object CheckCompleteness extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this
+}
+object PrintEFSMAll extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this
+}
 case class PrintEFSM(simple: GProtoName, r: Role) extends CLArg {}  // simple name (not fully qualified); r is GT Role
 
 object Main {
@@ -29,7 +35,7 @@ object Main {
         val cs = [A, B] => (h: B, t: (List[A], List[B])) => (t._1, h :: t._2)
         args match {
             case Nil => (List.empty, List.empty)
-            //case -gt-check-progress
+            //case -gt-check-progress  ...run global
             case "-gt-check-fidelity" :: tail => cs(CheckFidelity, parseArgs(tail))
             case "-gt-check-completeness" :: tail => cs(CheckCompleteness, parseArgs(tail))
             case "-gt-print-efsm-all" :: tail => cs(PrintEFSMAll, parseArgs(tail))
@@ -77,12 +83,6 @@ object Main {
             }
         })
 
-        /*println("\n[GT] Stepping global:\n")  // TODO -gt-check-progress
-        for ((n, _G) <- translated) {
-            val Gsys = GSystem(_G.getRoleCommitting, _G)
-            Gsys.run()
-        }*/
-
         println("\n[GT] Projecting:\n")
         val projected = translated.map((n, G) => (
             n,
@@ -91,22 +91,6 @@ object Main {
             ).toMap
         ))
         projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
-
-        if (gtargs.contains(CheckFidelity)) {
-            println("\n[GT] Stepping fidelity:\n")
-            for ((n, _G) <- translated) {
-                val sim = FidSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
-                sim.run()
-            }
-        }
-
-        if (gtargs.contains(CheckCompleteness)) {
-            println("\n[GT] Stepping completeness:\n")
-            for ((n, _G) <- translated) {
-                val sim = ComSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
-                sim.run()
-            }
-        }
 
         val efsms = projected.map((n, rL) => {
             val rcom = translated(n).getRoleCommitting
@@ -117,20 +101,36 @@ object Main {
             }))
         })
 
-        if (gtargs.contains(PrintEFSMAll)) {
-            //println("\n[GT] Printing all EFSMs:\n")
-            for ((n, rM) <- efsms) {
-                for ((r, _M) <- rM) {
-                    printGTEFSM(n, r, efsms(n)(r))
-                }
-            }
-        }
-
         gtargs.foreach {
-            case x: PrintEFSM =>
-                val full = findFullName(translated.keySet, x.simple)
-                printGTEFSM(full, x.r, efsms(full)(x.r))
-            case _ =>
+            /* // TODO -gt-check-progress
+                println("\n[GT] Stepping global:\n")
+                for ((n, _G) <- translated) {
+                    val Gsys = GSystem(_G.getRoleCommitting, _G)
+                    Gsys.run()
+                }*/
+            case CheckFidelity() =>
+                println("\n[GT] Stepping fidelity:\n")
+                for ((n, _G) <- translated) {
+                    val sim = FidSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
+                    sim.run()
+                }
+            case CheckCompleteness() =>
+                println("\n[GT] Stepping completeness:\n")
+                for ((n, _G) <- translated) {
+                    val sim = ComSim(toGSystem(_G), toLSystem(n, _G, projected(n)))
+                    sim.run()
+                }
+            case PrintEFSMAll() =>
+                //println("\n[GT] Printing all EFSMs:\n")
+                for ((n, rM) <- efsms) {
+                    for ((r, _M) <- rM) {
+                        printGTEFSM(n, r, _M)
+                    }
+                }
+            case PrintEFSM(simple, r) =>
+                val full = findFullName(translated.keySet, simple)
+                printGTEFSM(full, r, efsms(full)(r))
+            case x => throw new RuntimeException(s"Unknown arg: $x")
         }
     }
 
@@ -139,16 +139,6 @@ object Main {
 
     private def printGTEFSM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
         println(s"\n[GT] Printing GTEFSM:\n$n@$r:\n${efsm.toDot}")
-
-    /*// Pre: n is simple name
-    private def genEFSM(translated: Map[GProtoName, GType], projected: Map[GProtoName, Map[Role, LType]],
-            simple: GProtoName, r: Role): GTEFSM =
-        val full = translated.find((x, _) => x.getLastElement == simple.toString).get._1
-        val rcom = translated(full).getRoleCommitting
-        val s_init = new GTVState(GTVState.TOP_SCOPE)
-        val end = new GTVState(GTVState.TOP_SCOPE)
-        val efsm = projected(full)(r).construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end)
-        efsm.toGTEFSM*/
 
     private def toGSystem(G: GType): GSystem = GSystem(G.getRoleCommitting, G)
 
