@@ -114,15 +114,20 @@ object Main {
             }
         }
 
+        val efsms = projected.map((n, rL) => {
+            val rcom = translated(n).getRoleCommitting
+            (n, rL.map((r, _L) => {
+                val s_init = new GTVState(GTVState.TOP_SCOPE)
+                val end = new GTVState(GTVState.TOP_SCOPE)
+                (r, _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end).toGTEFSM)
+            }))
+        })
+
         if (gtargs.contains(PrintEFSMAll)) {
             println("\n[GT] Printing all EFSMs:\n")
-            for ((n, rL) <- projected) {
-                val rcom = translated(n).getRoleCommitting
-                for ((r, _L) <- rL) {
-                    val s_init = new GTVState(GTVState.TOP_SCOPE)
-                    val end = new GTVState(GTVState.TOP_SCOPE)
-                    val efsm = _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end)
-                    println(s"$n@$r:\n${efsm.toGTEFSM.toDot}")
+            for ((n, rM) <- efsms) {
+                for ((r, _M) <- rM) {
+                    println(s"$n@$r:\n${_M.toDot}")
                 }
             }
         }
