@@ -7,6 +7,7 @@ import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
+import org.scribble.ext.gt.codegen.erlang.{GTGenRoleGen, GTRoleGen}
 import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVState}
 
 import scala.jdk.CollectionConverters.*
@@ -16,16 +17,24 @@ import scala.jdk.CollectionConverters.*
 // - balanced up-to
 
 trait CLArg {}
+
 object CheckFidelity extends CLArg {
     def unapply(x: CLArg): Boolean = x == this //x.isInstanceOf[CheckFidelity.type]
 }
+
 object CheckCompleteness extends CLArg {
     def unapply(x: CLArg): Boolean = x == this
 }
+
 object PrintEFSMAll extends CLArg {
     def unapply(x: CLArg): Boolean = x == this
 }
-case class PrintEFSM(simple: GProtoName, r: Role) extends CLArg {}  // simple name (not fully qualified); r is GT Role
+
+// simple name (not fully qualified); r is GT Role
+case class PrintEFSM(simple: GProtoName, r: Role) extends CLArg {}
+case class PrintRM(simple: GProtoName, r: Role) extends CLArg {}
+case class PrintCM(simple: GProtoName, r: Role) extends CLArg {}
+
 
 object Main {
 
@@ -40,6 +49,8 @@ object Main {
             case "-gt-check-completeness" :: tail => cs(CheckCompleteness, parseArgs(tail))
             case "-gt-print-efsm-all" :: tail => cs(PrintEFSMAll, parseArgs(tail))
             case "-gt-print-efsm" :: n :: r :: tail => cs(PrintEFSM(new GProtoName(n), Role(r)), parseArgs(tail))
+            case "-gt-print-rm" :: n :: r :: tail => cs(PrintRM(new GProtoName(n), Role(r)), parseArgs(tail))
+            case "-gt-print-cm" :: n :: r :: tail => cs(PrintCM(new GProtoName(n), Role(r)), parseArgs(tail))
             case h :: t => cf(h, parseArgs(t))
         }
 
@@ -65,6 +76,8 @@ object Main {
 
         println("\n[GT] Translating:")
         val translated = getTranslatedProtocols(parsed)
+        def findFullName(simple: GProtoName): GProtoName =
+            translated.keySet.find(x => x.getLastElement == simple.toString).get
         println(s"\n${translated}")
 
         println("\n[GT] Unfolding all once:\n")
@@ -92,6 +105,7 @@ object Main {
         ))
         projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
 
+        // !!! map key is full name -- cf. findFullName (from simple name) above
         val efsms = projected.map((n, rL) => {
             val rcom = translated(n).getRoleCommitting
             (n, rL.map((r, _L) => {
@@ -128,17 +142,34 @@ object Main {
                     }
                 }
             case PrintEFSM(simple, r) =>
-                val full = findFullName(translated.keySet, simple)
+                val full = findFullName(simple)
                 printGTEFSM(full, r, efsms(full)(r))
+            case PrintRM(simple, r) =>
+                val full = findFullName(simple)
+                printRM(full, r, efsms(full)(r))
+            case PrintCM(simple, r) =>
+                val full = findFullName(simple)
+                printCM(full, r, efsms(full)(r))
             case x => throw new RuntimeException(s"Unknown arg: $x")
         }
+
+        /*for ((n, rM) <- efsms) {
+            for ((r, _M) <- rM) {
+                val r1 = LType.convertRole(r)
+                println(s"\n[debug] Role gen:\n${new GTRoleGen().generate(n, r1, _M)}")
+                println(s"\n[debug] Gen role gen:\n${new GTGenRoleGen().generate(n, r1, _M)}")
+            }
+        }*/
     }
 
-    private def findFullName(allFull: Set[GProtoName], simple: GProtoName): GProtoName =
-        allFull.find(x => x.getLastElement == simple.toString).get
-
     private def printGTEFSM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
-        println(s"\n[GT] Printing GTEFSM:\n$n@$r:\n${efsm.toDot}")
+        println(s"\n[GT] Printing GTEFSM:\n\n$n@$r:\n${efsm.toDot}")
+
+    private def printRM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
+        println(s"\n[GT] Printing RM:\n\n$n@$r:\n${new GTGenRoleGen().generate(n, LType.convertRole(r), efsm)}")
+
+    private def printCM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
+        println(s"\n[GT] Printing CM:\n\n$n@$r:\n${new GTRoleGen().generate(n, LType.convertRole(r), efsm)}")
 
     private def toGSystem(G: GType): GSystem = GSystem(G.getRoleCommitting, G)
 
