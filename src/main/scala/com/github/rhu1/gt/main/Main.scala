@@ -29,6 +29,7 @@ object Main {
         val cs = [A, B] => (h: B, t: (List[A], List[B])) => (t._1, h :: t._2)
         args match {
             case Nil => (List.empty, List.empty)
+            //case -gt-check-progress
             case "-gt-check-fidelity" :: tail => cs(CheckFidelity, parseArgs(tail))
             case "-gt-check-completeness" :: tail => cs(CheckCompleteness, parseArgs(tail))
             case "-gt-print-efsm-all" :: tail => cs(PrintEFSMAll, parseArgs(tail))
@@ -76,7 +77,7 @@ object Main {
             }
         })
 
-        /*println("\n[GT] Stepping global:\n")
+        /*println("\n[GT] Stepping global:\n")  // TODO -gt-check-progress
         for ((n, _G) <- translated) {
             val Gsys = GSystem(_G.getRoleCommitting, _G)
             Gsys.run()
@@ -90,13 +91,6 @@ object Main {
             ).toMap
         ))
         projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
-
-        /*println("\n[GT] Stepping local:\n")
-        for ((n, _) <- projected) {
-            val Y = toLSystem(n, translated(n), projected(n))
-            //println(Y)
-            Y.run()
-        }*/
 
         if (gtargs.contains(CheckFidelity)) {
             println("\n[GT] Stepping fidelity:\n")
@@ -124,22 +118,29 @@ object Main {
         })
 
         if (gtargs.contains(PrintEFSMAll)) {
-            println("\n[GT] Printing all EFSMs:\n")
+            //println("\n[GT] Printing all EFSMs:\n")
             for ((n, rM) <- efsms) {
                 for ((r, _M) <- rM) {
-                    println(s"$n@$r:\n${_M.toDot}")
+                    printGTEFSM(n, r, efsms(n)(r))
                 }
             }
         }
 
         gtargs.foreach {
-            case x: PrintEFSM => println("\n[GT] Printing EFSM:\n" +
-                s"${x.simple}@${x.r}:\n${genEFSM(translated, projected, x.simple, x.r).toDot}")
+            case x: PrintEFSM =>
+                val full = findFullName(translated.keySet, x.simple)
+                printGTEFSM(full, x.r, efsms(full)(x.r))
             case _ =>
         }
     }
 
-    // Pre: n is simple name
+    private def findFullName(allFull: Set[GProtoName], simple: GProtoName): GProtoName =
+        allFull.find(x => x.getLastElement == simple.toString).get
+
+    private def printGTEFSM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
+        println(s"\n[GT] Printing GTEFSM:\n$n@$r:\n${efsm.toDot}")
+
+    /*// Pre: n is simple name
     private def genEFSM(translated: Map[GProtoName, GType], projected: Map[GProtoName, Map[Role, LType]],
             simple: GProtoName, r: Role): GTEFSM =
         val full = translated.find((x, _) => x.getLastElement == simple.toString).get._1
@@ -147,8 +148,7 @@ object Main {
         val s_init = new GTVState(GTVState.TOP_SCOPE)
         val end = new GTVState(GTVState.TOP_SCOPE)
         val efsm = projected(full)(r).construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end)
-        efsm.toGTEFSM
-
+        efsm.toGTEFSM*/
 
     private def toGSystem(G: GType): GSystem = GSystem(G.getRoleCommitting, G)
 
