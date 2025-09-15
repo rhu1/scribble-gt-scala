@@ -1,0 +1,15 @@
+{application, interleaving,
+ [{description, "An interleaving application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {interleaving_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {licenses, ["Apache-2.0"]},
+  {links, []}
+ ]}.

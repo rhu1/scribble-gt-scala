@@ -1,0 +1,15 @@
+digraph G {
+compound = true;
+"1" [ label="1[] 0:" ];
+"6" [ label="6[X] ▷1:" ];
+"7" [ label="7[] 1:" ];
+"8" [ label="8[] 1:" ];
+"2" [ label="2[] 0:" ];
+"7" -> "8" [ label="𝜏_result/M!result(Payload)" ];
+"7" -> "2" [ label="FD?Timeout()/ε*" ];
+"8" -> "6" [ label="M?more(Payload)/ε" ];
+"1" -> "6" [ label="M?init(Payload)/ε" ];
+"6" -> "7" [ label="𝜏_HB/FD!HB()" ];
+"6" -> "2" [ label="FD?Timeout()/ε*" ];
+"8" -> "2" [ label="FD?Timeout()/ε*" ];
+}
