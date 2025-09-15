@@ -42,13 +42,12 @@ s7(internal, {world}, #state_data{alice_pid = AlicePid} = Data) ->
 -spec connection(state_data()) -> state_data().
 connection(Data) ->
     io:format("bob connected ~n", []),
-    AlicePid = case whereis(alice) of
+    AlicePid = case whereis(alice2) of
         undefined ->
-            io:format("alice is not available yet. Will retry...~n", []),
+            io:format("alice2 is not available yet. Will retry...~n", []),
             timer:sleep(1000),
-            whereis(alice);
-        Pid_alice ->
-            Pid_alice
+            whereis(alice2);
+        Pid_alice2 ->
+            Pid_alice2
     end,
     Data#state_data{alice_pid = AlicePid}.
-

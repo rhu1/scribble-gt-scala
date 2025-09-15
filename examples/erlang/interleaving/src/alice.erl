@@ -4,12 +4,12 @@
 -export([init/1,
   callback_mode/0,
   start_link/0,
-  s1/3,
-  s3/3
+  s5/3,
+  s7/3
 ]).
 
 -include("alice.hrl").
--type state_data() :: #state_data{alice_pid :: pid() | undefined, carol_pid :: pid() | undefined}.
+-type state_data() :: #state_data{carol_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -19,30 +19,30 @@ start_link() ->
 callback_mode() ->
   state_functions.
 
--spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {ping}}]}.
+-spec init(list()) -> {ok, s5, state_data()}.
 init([]) ->
   Data = #state_data{},
   io:format("alice initialized ~n", []),
-  {ok, s1, Data, [{next_event, internal, {ping}}]}.
+  {ok, s5, Data}.
 
--spec s3(cast, {pid(), {atom(), term()}}, state_data()) -> {stop, normal, state_data()}.
-s3(cast, {CarolPid, {pong}}, #state_data{carol_pid = CarolPid} = Data) ->
-  io:format("Alice: s3 Received pong  from Carol ~p ~n", [CarolPid]),
-  %% start alice 2 (only if not already running)
+-spec s5(cast, {pid(), {atom(), term()}}, state_data()) ->
+  {next_state, s7, state_data(), [{next_event, internal, {ping}}]} |
+  {keep_state, state_data()}.
+s5(cast, {CarolPid, {pong}}, #state_data{carol_pid = CarolPid} = Data) ->
+  Data1 = connection(Data),
+  io:format("Alice: s5 Received pong  from Carol ~p ~n", [CarolPid]),
+  {next_state, s7, Data1, [{next_event, internal, {ping}}]}.
+
+-spec s7(internal, {atom()}, state_data()) -> {stop, normal, state_data()}.
+s7(internal, {ping}, #state_data{carol_pid = CarolPid} = Data) ->
+  io:format("Alice: s7 Sending ping to Carol ~n", []),
+  gen_alice:send_s7_ping(CarolPid, Data),
   case whereis(alice2) of
     undefined -> _ = alice2:start_link();
     _Pid -> ok
   end,
 
   {stop, normal, Data}.
-
--spec s1(internal, {atom()}, state_data()) -> {next_state, s3, state_data()}.
-s1(internal, {ping}, Data) ->
-  Data1 = connection(Data),
-  CarolPid = Data1#state_data.carol_pid,
-  io:format("Alice: s1 Sending ping to Carol ~n", []),
-  gen_alice:send_s1_ping(CarolPid, Data1),
-  {next_state, s3, Data1}.
 
 -spec connection(state_data()) -> state_data().
 connection(Data) ->
