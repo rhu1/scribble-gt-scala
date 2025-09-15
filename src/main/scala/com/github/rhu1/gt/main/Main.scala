@@ -7,7 +7,7 @@ import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
-import org.scribble.ext.gt.codegen.erlang.{GTGenRoleGen, GTRoleGen}
+import org.scribble.ext.gt.codegen.erlang.{GTCallbackModule, GTGenericBehaviour, GTGenRoleGen, GTRoleGen}
 import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVState}
 
 import scala.jdk.CollectionConverters.*
@@ -30,10 +30,25 @@ object PrintEFSMAll extends CLArg {
     def unapply(x: CLArg): Boolean = x == this
 }
 
+object GenerateCallbackAll extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this
+}
+
+object GenerateBehaviourAll extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this
+}
+
+object GenerateAllModulesAll extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this
+}
+
 // simple name (not fully qualified); r is GT Role
 case class PrintEFSM(simple: GProtoName, r: Role) extends CLArg {}
 case class PrintRM(simple: GProtoName, r: Role) extends CLArg {}
 case class PrintCM(simple: GProtoName, r: Role) extends CLArg {}
+case class GenerateCallback(simple: GProtoName, r: Role) extends CLArg {}
+case class GenerateBehaviour(simple: GProtoName, r: Role) extends CLArg {}
+case class GenerateAllModules(simple: GProtoName, r: Role) extends CLArg {}
 
 
 object Main {
@@ -51,6 +66,12 @@ object Main {
             case "-gt-print-efsm" :: n :: r :: tail => cs(PrintEFSM(new GProtoName(n), Role(r)), parseArgs(tail))
             case "-gt-print-rm" :: n :: r :: tail => cs(PrintRM(new GProtoName(n), Role(r)), parseArgs(tail))
             case "-gt-print-cm" :: n :: r :: tail => cs(PrintCM(new GProtoName(n), Role(r)), parseArgs(tail))
+            case "-gt-generate-callback-all" :: tail => cs(GenerateCallbackAll, parseArgs(tail))
+            case "-gt-generate-callback" :: n :: r :: tail => cs(GenerateCallback(new GProtoName(n), Role(r)), parseArgs(tail))
+            case "-gt-generate-behaviour-all" :: tail => cs(GenerateBehaviourAll, parseArgs(tail))
+            case "-gt-generate-behaviour" :: n :: r :: tail => cs(GenerateBehaviour(new GProtoName(n), Role(r)), parseArgs(tail))
+            case "-gt-generate-erlang-all" :: tail => cs(GenerateAllModulesAll, parseArgs(tail))
+            case "-gt-generate-erlang" :: n :: r :: tail => cs(GenerateAllModules(new GProtoName(n), Role(r)), parseArgs(tail))
             case h :: t => cf(h, parseArgs(t))
         }
 
@@ -115,6 +136,61 @@ object Main {
             }))
         })
 
+        // Helper function to generate callback modules with access to translated protocols
+        def generateCallbackModule(n: GProtoName, r: Role, efsm: GTEFSM): Unit = {
+            try {
+                val protocolName = n.getLastElement
+                val javaRole = LType.convertRole(r)
+                val sigmaRoles = translated.get(n) match {
+                    case Some(gtype) => gtype.getLiveRoles.map(LType.convertRole).asJava
+                    case None => throw new RuntimeException(s"Could not find protocol $n")
+                }
+
+                val callbackModule = new GTCallbackModule()
+                callbackModule.generate(protocolName, javaRole, efsm, sigmaRoles)
+                println(s"\n[GT] Generated Callback Module for $n@$r in ./generated/$protocolName/")
+            } catch {
+                case e: java.io.IOException =>
+                    println(s"\n[GT] Error generating Callback Module for $n@$r: ${e.getMessage}")
+                case e: Exception =>
+                    println(s"\n[GT] Unexpected error generating Callback Module for $n@$r: ${e.getMessage}")
+            }
+        }
+
+        // Helper function to generate behaviour modules with access to translated protocols
+        def generateBehaviourModule(n: GProtoName, r: Role, efsm: GTEFSM): Unit = {
+            try {
+                val protocolName = n.getLastElement
+                val javaRole = LType.convertRole(r)
+                val gtype = translated.get(n) match {
+                    case Some(gtype) => gtype
+                    case None => throw new RuntimeException(s"Could not find protocol $n")
+                }
+                val sigmaRoles = gtype.getLiveRoles.map(LType.convertRole).asJava
+
+                // Convert role committing information to explicit committing format
+                val roleCommitting = gtype.getRoleCommitting.get(r) match {
+                    case Some(roleComMap) => roleComMap
+                    case None => Map.empty[Mid, Set[Op]]
+                }
+
+                val explicitCommiting: java.util.Map[Integer, java.util.Set[org.scribble.core.`type`.name.Op]] =
+                    roleCommitting.map { case (mid, ops) =>
+                        val javaOps = ops.map(op => new org.scribble.core.`type`.name.Op(op.toString)).asJava
+                        (mid.asInstanceOf[Integer], javaOps)
+                    }.asJava
+
+                val behaviourModule = new GTGenericBehaviour()
+                behaviourModule.generateCode(protocolName, javaRole, efsm, explicitCommiting, sigmaRoles)
+                println(s"\n[GT] Generated Behaviour Module for $n@$r in ./generated/$protocolName/")
+            } catch {
+                case e: java.io.IOException =>
+                    println(s"\n[GT] Error generating Behaviour Module for $n@$r: ${e.getMessage}")
+                case e: Exception =>
+                    println(s"\n[GT] Unexpected error generating Behaviour Module for $n@$r: ${e.getMessage}")
+            }
+        }
+
         gtargs.foreach {
             /* // TODO -gt-check-progress
                 println("\n[GT] Stepping global:\n")
@@ -150,6 +226,36 @@ object Main {
             case PrintCM(simple, r) =>
                 val full = findFullName(simple)
                 printCM(full, r, efsms(full)(r))
+            case GenerateCallbackAll() =>
+                for ((n, rM) <- efsms) {
+                    for ((r, _M) <- rM) {
+                        generateCallbackModule(n, r, _M)
+                    }
+                }
+            case GenerateCallback(simple, r) =>
+                val full = findFullName(simple)
+                generateCallbackModule(full, r, efsms(full)(r))
+            case GenerateBehaviourAll() =>
+                for ((n, rM) <- efsms) {
+                    for ((r, _M) <- rM) {
+                        generateBehaviourModule(n, r, _M)
+                    }
+                }
+            case GenerateBehaviour(simple, r) =>
+                val full = findFullName(simple)
+                generateBehaviourModule(full, r, efsms(full)(r))
+            case GenerateAllModulesAll() =>
+                for ((n, rM) <- efsms) {
+                    for ((r, _M) <- rM) {
+                        generateCallbackModule(n, r, _M)
+                        generateBehaviourModule(n, r, _M)
+                    }
+                }
+            case GenerateAllModules(simple, r) =>
+                val full = findFullName(simple)
+                generateCallbackModule(full, r, efsms(full)(r))
+                generateBehaviourModule(full, r, efsms(full)(r))
+
             case x => throw new RuntimeException(s"Unknown arg: $x")
         }
 
@@ -187,5 +293,3 @@ object Main {
             Scrib2GT.translateSeq(p.getDefChild.getBlockChild.getInteractSeqChild))
         )).toMap
 }
-
-

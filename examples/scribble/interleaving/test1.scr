@@ -1,0 +1,6 @@
+module test1;
+
+global protocol test1(role Alice, role Carol){
+    ping() from Alice to Carol;
+    pong() from Carol to Alice;
+}

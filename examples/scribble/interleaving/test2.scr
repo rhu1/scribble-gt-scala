@@ -1,0 +1,7 @@
+module test2;
+
+
+global protocol test2(role Alice, role Bob){
+    hello() from Alice to Bob;
+    world() from Bob to Alice;
+}

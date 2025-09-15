@@ -1,0 +1,1 @@
+-record(state_data, {mc_counter_1 = 0 :: integer(), w_pid :: pid() | undefined, fd_pid :: pid() | undefined}).

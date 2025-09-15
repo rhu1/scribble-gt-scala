@@ -1,0 +1,20 @@
+module Fibonacci;
+data <erlang> "integer()" from "rt.jar" as Num;
+
+
+global protocol Fibonacci(role a, role b){
+	rec fib	{
+	    mixed{
+            choice at a {
+                fibonacci(Num) from a to b;
+                fibonacci(Num) from b to a;
+                continue fib;
+            } or {
+                stop() from a to b;
+                ack() from b to a; // otherwise Not left-committing (clear-termination)
+            }
+		} or a->b {
+		    error() from b to a;
+		}
+	}
+}

@@ -1,0 +1,21 @@
+{application, failure_handling,
+ [{description, "An asynch application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {failure_handling_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, [
+    failure_handling_app,
+    failure_handling_sup,
+    failure_handling,
+    w,
+    m
+   ]},
+
+  {licenses, ["Apache-2.0"]},
+  {links, []}
+ ]}.
