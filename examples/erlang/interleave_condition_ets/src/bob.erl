@@ -4,8 +4,8 @@
 -export([init/1,
 	 callback_mode/0,
 	 start_link/0,
-	 s5/3,
-	 s7/3
+    s1/3,
+    s3/3
 	]).
 
 -include("bob.hrl").
@@ -19,32 +19,31 @@ start_link() ->
 callback_mode() ->
     state_functions.
 
--spec init(list()) -> {ok, s5, state_data()}.
+-spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {request}}]}.
 init([]) ->
     Data = #state_data{},
     io:format("bob initialized ~n", []),
-    {ok, s5, Data}.
+    {ok, s1, Data, [{next_event, internal, {request}}]}.
 
--spec s5(cast, {pid(), {atom(), term()}}, state_data()) ->
-    {next_state, s7, state_data(), [{next_event, internal, {world}}]} |
-    {keep_state, state_data()}.
-s5(cast, {AlicePid, {hello}}, Data) ->
-    Data1 = connection(Data),
-    io:format("Bob: s5 Received hello  from Alice ~p ~n", [AlicePid]),
-    {next_state, s7, Data1, [{next_event, internal, {world}}]}.
-
--spec s7(internal, {atom()}, state_data()) -> {stop, normal, state_data()}.
-s7(internal, {world}, #state_data{alice_pid = AlicePid} = Data) ->
-    io:format("Bob: s7 Sending world to Alice ~n", []),
-    gen_bob:send_s7_world(AlicePid, Data),
+-spec s3(cast, {pid(), {atom(), term()}}, state_data()) -> {stop, normal, state_data()}.
+s3(cast, {AlicePid, {response}}, #state_data{alice_pid = AlicePid} = Data) ->
+    io:format("Bob: s3 Received response  from Alice ~p ~n", [AlicePid]),
     {stop, normal, Data}.
+
+-spec s1(internal, {atom()}, state_data()) -> {next_state, s3, state_data()}.
+s1(internal, {request}, Data) ->
+    Data1 = connection(Data),
+    AlicePid = Data1#state_data.alice_pid,
+    io:format("Bob: s1 Sending request to Alice ~n", []),
+    gen_bob:send_s1_request(AlicePid, Data1),
+    {next_state, s3, Data1}.
 
 -spec connection(state_data()) -> state_data().
 connection(Data) ->
     io:format("bob connected ~n", []),
     AlicePid = case whereis(alice2) of
         undefined ->
-            io:format("alice2 is not available yet. Will retry...~n", []),
+            io:format("alice is not available yet. Will retry...~n", []),
             timer:sleep(1000),
             whereis(alice2);
         Pid_alice2 ->

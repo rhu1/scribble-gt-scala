@@ -4,12 +4,12 @@
 -export([init/1,
   callback_mode/0,
   start_link/0,
-  s3/3,
-  s4/3
+  s5/3,
+  s7/3
 ]).
 
 -include("alice2.hrl").
--type state_data() :: #state_data{alice_pid :: pid() | undefined, bob_pid :: pid() | undefined}.
+-type state_data() :: #state_data{bob_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -19,24 +19,25 @@ start_link() ->
 callback_mode() ->
   state_functions.
 
--spec init(list()) -> {ok, s3, state_data(), [{next_event, internal, {hello}}]}.
+-spec init(list()) -> {ok, s5, state_data()}.
 init([]) ->
   Data = #state_data{},
   io:format("alice initialized ~n", []),
-  {ok, s3, Data, [{next_event, internal, {hello}}]}.
+  {ok, s5, Data}.
 
--spec s4(cast, {pid(), {atom(), term()}}, state_data()) -> {stop, normal, state_data()}.
-s4(cast, {BobPid, {world}}, #state_data{bob_pid = BobPid} = Data) ->
-  io:format("Alice: s4 Received world  from Bob ~p ~n", [BobPid]),
-  {stop, normal, Data}.
-
--spec s3(internal, {atom()}, state_data()) -> {next_state, s4, state_data()}.
-s3(internal, {hello}, Data) ->
+-spec s5(cast, {pid(), {atom(), term()}}, state_data()) ->
+  {next_state, s7, state_data(), [{next_event, internal, {response}}]} |
+  {keep_state, state_data()}.
+s5(cast, {BobPid, {request}}, Data) ->
   Data1 = connection(Data),
-  BobPid = Data1#state_data.bob_pid,
-  io:format("Alice: s3 Sending hello to Bob ~n", []),
-  gen_alice2:send_s3_hello(BobPid, Data1),
-  {next_state, s4, Data1}.
+  io:format("Alice: s5 Received request  from Bob ~p ~n", [BobPid]),
+  {next_state, s7, Data1, [{next_event, internal, {response}}]}.
+
+-spec s7(internal, {atom()}, state_data()) -> {stop, normal, state_data()}.
+s7(internal, {response}, #state_data{bob_pid = BobPid} = Data) ->
+  io:format("Alice: s7 Sending response to Bob ~n", []),
+  gen_alice2:send_s7_response(BobPid, Data),
+  {stop, normal, Data}.
 
 -spec connection(state_data()) -> state_data().
 connection(Data) ->
@@ -50,3 +51,4 @@ connection(Data) ->
                Pid_bob
            end,
   Data#state_data{bob_pid = BobPid}.
+

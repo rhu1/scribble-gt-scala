@@ -28,7 +28,7 @@ init([]) ->
 -spec s5(cast, {pid(), {atom(), term()}}, state_data()) ->
   {next_state, s7, state_data(), [{next_event, internal, {ping}}]} |
   {keep_state, state_data()}.
-s5(cast, {CarolPid, {pong}}, #state_data{carol_pid = CarolPid} = Data) ->
+s5(cast, {CarolPid, {pong}}, Data) ->
   Data1 = connection(Data),
   io:format("Alice: s5 Received pong  from Carol ~p ~n", [CarolPid]),
   {next_state, s7, Data1, [{next_event, internal, {ping}}]}.
@@ -37,11 +37,8 @@ s5(cast, {CarolPid, {pong}}, #state_data{carol_pid = CarolPid} = Data) ->
 s7(internal, {ping}, #state_data{carol_pid = CarolPid} = Data) ->
   io:format("Alice: s7 Sending ping to Carol ~n", []),
   gen_alice:send_s7_ping(CarolPid, Data),
-  case whereis(alice2) of
-    undefined -> _ = alice2:start_link();
-    _Pid -> ok
-  end,
-
+  %% alice registers 'alice2'
+  _ = gen_alice2:start_link(alice2, []),
   {stop, normal, Data}.
 
 -spec connection(state_data()) -> state_data().
