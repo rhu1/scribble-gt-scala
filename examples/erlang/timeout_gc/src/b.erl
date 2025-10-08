@@ -44,14 +44,15 @@ s5(internal, {'TOa'}, Data) ->
     APid = NewData#state_data.a_pid,
     case make_choice_TOa(NewData) of
         1 ->
-            {keep_state, NewData};
+          io:format("B: s5 waiting for a1 ~n", []),
+          {keep_state, NewData};
         2 ->
             gen_b:send_s5_TOa(APid, NewData),
             io:format("B: s5 Sending TOa to A ~n", []),
             {next_state, s3, NewData, [{next_event, internal, {'TOc'}}]}
     end;
 s5(cast, {APid, {a1}}, #state_data{a_pid = APid} = Data) ->
-    io:format("C: s5 Received a1  from A ~p ~n", [APid]),
+    io:format("B: s5 Received a1  from A ~p ~n", [APid]),
     case make_choice_a1(Data) of
         1 ->
             {next_state, s6, Data, [{next_event, internal, {a3}}]};
