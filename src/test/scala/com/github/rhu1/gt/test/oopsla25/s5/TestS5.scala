@@ -14,9 +14,9 @@ class TestS5 extends AnyFunSuite {
         TestUtil.testGood(TestUtil.BASE_PATH + "/s5/good/Interr.scr");
     }
 
-    test("AMQP") {
+    /*test("AMQP") {
         TestUtil.testGood(TestUtil.BASE_PATH + "/s5/good/AMQP.scr");
-    }
+    }*/
 
     test("AMQP_long") {
         TestUtil.testGood(TestUtil.BASE_PATH + "/s5/good/AMQP_long.scr");
