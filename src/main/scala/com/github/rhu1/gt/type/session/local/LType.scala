@@ -21,11 +21,6 @@ trait LType extends SType {
 
     def unfold: LType = this
 
-    //def unfoldAllImmediate: LType = this
-
-    /*def unfoldAllOncePrefix: LType = unfoldAllOncePrefixAux(Set())
-    protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType*/
-
     /* ... */
 
     def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
@@ -56,7 +51,6 @@ object LType {
         if (x == y) {
             Some(x)
         } else {
-            //println(s"mmmmm1:\n\t$x\n\t$y")
             (x, y) match {
                 case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
                     if (src1 == src2
@@ -65,32 +59,11 @@ object LType {
                     } else {
                         None
                     }
-                case (LRec(rvar1, body1), LRec(rvar2, body2)) if (rvar1 == rvar2) =>
+                case (LRec(rvar1, body1), LRec(rvar2, body2)) if rvar1 == rvar2 =>
                     merge(body1, body2).map(z => LRec(rvar1, z))
-                case _ => None  // !!! no MC cases
+                case _ => None  // no MC cases
             }
         }
-
-    /*def runtimeMerge(x: LType, y: LType): Option[LType] =
-        if (x == y) {
-            Some(x)
-        } else {
-            println(s"mmmmm2:\n\t$x\n\t$y")
-            (x, y) match {
-                case (_, LEnd) => Some(LEnd)  // XXX not general, cf. OnlineWallet (need to merge Sel/Bra...) => need regular choice committment to distinguish third-party wiggly cases of merge versus committed
-                case (LEnd, _) => Some(LEnd)
-                case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
-                    if (src1 == src2
-                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // HERE TODO relax, check intersect identity
-                        Some(LBranch(src1, cases1 ++ cases2))
-                    } else {
-                        None
-                    }
-                case (LRec(rvar1, body1), LRec(rvar2, body2)) if (rvar1 == rvar2) =>
-                    merge(body1, body2).map(z => LRec(rvar1, z))
-                case _ => None  // !!! no MC cases
-            }
-        }*/
 
     def mergeSigma(x: Sigma, y: Sigma): Option[Sigma] = if (x == y) Some(x) else None
 
@@ -103,11 +76,11 @@ object LType {
         new org.scribble.core.`type`.name.Op(op.toString)
 
     def convertPay(pay: Payload): org.scribble.core.`type`.session.Payload =
-        val ds: java.util.List[org.scribble.core.`type`.name.PayElemType[?]] =   // !!! annot needed
+        val ds: java.util.List[org.scribble.core.`type`.name.PayElemType[?]] =   // annot needed
             pay.elems.map(convertPayElem).asJava
         new org.scribble.core.`type`.session.Payload(ds)
 
-    def convertPayElem(d: Data): org.scribble.core.`type`.name.DataName =
+    private def convertPayElem(d: Data): org.scribble.core.`type`.name.DataName =
         new org.scribble.core.`type`.name.DataName(d.toString)
 
     def convertRecVar(rvar: RecVar): org.scribble.core.`type`.name.RecVar =
@@ -117,17 +90,11 @@ object LType {
 
     // x <: y -- x fastforward to y including under nested non-redex contexts
     def pre(x: LType, y: LType): Boolean = (x, y) match {
-        /*case (LBranch(s1, c1), LBranch(s2, c2)) =>
-            s1 == s2 && c2.keySet.subsetOf(c1.keySet) &&  // !!! fast forward, not subtype -- branch/select same variance
-                c2.keySet.forall(k => pre(c1(k), c2(k)))
-        case (LSelect(s1, c1), LSelect(s2, c2)) =>
-            s1 == s2 && c1.keySet.subsetOf(c2.keySet) &&
-                c2.keySet.forall(k => pre(c1(k), c2(k)))*/
         case (LBranch(s1, c1), LBranch(s2, c2)) if c1.keySet == c2.keySet
-            || c2.keySet.size == 1 =>  // !!! fast forward, not subtype -- branch/select same variance
+                || c2.keySet.size == 1 =>  // fast-forward, not subtype -- branch/select same variance
             s1 == s2 && c2.keySet.forall(k => pre(c1(k), c2(k)))
         case (LSelect(s1, c1), LSelect(s2, c2)) if c1.keySet == c2.keySet
-            || c2.keySet.size == 1 =>
+                || c2.keySet.size == 1 =>
             s1 == s2 && c2.keySet.forall(k => pre(c1(k), c2(k)))
         case (LMixed(i1, l1, o1, r1), LMixed(i2, l2, o2, r2)) =>
             i1 == i2 && pre(l1, l2) && o1 == o2 && pre(r1, r2)
@@ -155,9 +122,6 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     override def subs(x: Map[RecVar, LType]): LSelect =
         LSelect(this.dst, this.cases.map((k, v) => (k, v.subs(x))))
-
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LSelect(this.dst, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))*/
 
     /* ... */
 
@@ -218,7 +182,7 @@ case class LSelect(dst: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
     override def toString: String =
         s"${this.dst}${ConsoleColours.OLPLUS}${SType.casesToString(this.cases)}"
 
-    def getPay(op: Op): Payload =
+    private def getPay(op: Op): Payload =
         this.cases.find { case ((o, p), _) => o == op }.get._1._2
 }
 
@@ -228,9 +192,6 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
 
     override def subs(x: Map[RecVar, LType]): LBranch =
         LBranch(this.src, this.cases.map((k, v) => (k, v.subs(x))))
-
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LBranch(this.src, cases.map((k, v) => (k, v.unfoldAllOncePrefixAux(done))))*/
 
     /* ... */
 
@@ -303,16 +264,13 @@ case class LBranch(src: Role, cases: ListMap[(Op, Payload), LType]) extends LTyp
         this.cases.find { case ((o, p), _) => o == op }.get._1._2
 }
 
-// !!! consider LOtherMixed, LObserverMixed
+// ...consider LOtherMixed, LObserverMixed
 case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
 
     /* ... */
 
     override def subs(x: Map[RecVar, LType]): LMixed =
         LMixed(this.id, this.left.subs(x), this.obs, this.right.subs(x))
-
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -324,8 +282,8 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
         }
 
     // No consideration of "nested interrupt edges" due to observer immediately committing on both left/right
-    protected def constructInternal(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
-            c: Mid, s: GTVState, end: GTVState): EFSM = {
+    private def constructInternal(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
+                                  c: Mid, s: GTVState, end: GTVState): EFSM = {
         val left = this.left.asInstanceOf[LBranch]
         val right = this.right.asInstanceOf[LSelect]
 
@@ -367,8 +325,8 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
         EFSM(S, init, E, A, delta)
     }
 
-    protected def constructExternal(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
-            c: Mid, s: GTVState, end: GTVState): EFSM = {
+    private def constructExternal(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
+                                  c: Mid, s: GTVState, end: GTVState): EFSM = {
         val left = this.left
         val right = this.right.asInstanceOf[LBranch]
 
@@ -377,7 +335,7 @@ case class LMixed(id: Mid, left: LType, obs: Role, right: LType) extends LType {
         }
 
         val leftStars = mutable.HashMap(recvStars.toSeq: _*)
-        val op = cases_right.keySet.iterator.next // !!! right.cases.size() == 1
+        val op = cases_right.keySet.iterator.next // right.cases.size() == 1
 
         leftStars.put(this.id, (new GTVRecv(LType.convertRole(right.src), LType.convertOp(op), LType.convertPay(right.getPay(op))), cases_right(op).init))
         val s1 = new GTVState(true, this.id, s.recvars)
@@ -456,9 +414,6 @@ case class LActiveMixed(id: Mid, left: LType, //obs: Role,  // Unnecessary and a
     override def subs(x: Map[RecVar, LType]): LActiveMixed =
         LActiveMixed(this.id, this.left.subs(x), this.right.subs(x))
 
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LActiveMixed(this.id, this.left.unfoldAllOncePrefixAux(done), this.obs, this.right.unfoldAllOncePrefixAux(done))*/
-
     /* ... */
 
     override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
@@ -468,7 +423,7 @@ case class LActiveMixed(id: Mid, left: LType, //obs: Role,  // Unnecessary and a
     /* ... */
 
     override def getActions(subj: Role, pi: Path, q: Sigma): Set[LAction] =
-        // !!! includes context rule \nu's
+        // includes context rule \nu's
         val left = this.left.getActions(subj, pi :+ pL, q)
         val right = this.right.getActions(subj, pi :+ pR, q)
         if ((left intersect right).nonEmpty) {
@@ -522,19 +477,16 @@ case class LActiveMixed(id: Mid, left: LType, //obs: Role,  // Unnecessary and a
     /* ... */
 
     override def toString: String =
-        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id} ${this.right}]"
+        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}$id ${this.right}]"
 }
 
-// !!! no obs -- ...also LActiveMixed ?
+// no obs -- ...also LActiveMixed ?
 case class LActiveLeft(id: Mid, left: LType) extends LType {
 
     /* ... */
 
     override def subs(x: Map[RecVar, LType]): LActiveLeft =
         LActiveLeft(this.id, this.left.subs(x))
-
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LActiveLeft(this.id, this.left.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -560,7 +512,7 @@ case class LActiveLeft(id: Mid, left: LType) extends LType {
     /* ... */
 
     override def toString: String =
-        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}${id} ${ConsoleColours.BULLET}]"
+        s"[${this.left} ${ConsoleColours.BLACK_TRIANGLE}$id ${ConsoleColours.BULLET}]"
 }
 
 case class LActiveRight(id: Mid, right: LType) extends LType {
@@ -569,9 +521,6 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
 
     override def subs(x: Map[RecVar, LType]): LActiveRight =
         LActiveRight(this.id, this.right.subs(x))
-
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        LActiveRight(this.id, this.right.unfoldAllOncePrefixAux(done))*/
 
     /* ... */
 
@@ -597,7 +546,7 @@ case class LActiveRight(id: Mid, right: LType) extends LType {
     /* ... */
 
     override def toString: String =
-        s"[${ConsoleColours.BULLET} ${ConsoleColours.BLACK_TRIANGLE}${id} ${this.right}]"
+        s"[${ConsoleColours.BULLET} ${ConsoleColours.BLACK_TRIANGLE}$id ${this.right}]"
 }
 
 case class LRec(rvar: RecVar, body: LType) extends LType {
@@ -609,18 +558,11 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
 
     override def unfold: LType = this.body.subs(Map(this.rvar -> this))
 
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        if (done.contains(this.rvar)) {
-            LEnd
-        } else {
-            unfold |> (_.unfoldAllOncePrefixAux(done + this.rvar))
-        }*/
-
     /* ... */
 
     override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
                            c: Mid, s: GTVState, end: GTVState): EFSM =
-        val recvars = s.recvars.asScala + LType.convertRecVar(this.rvar)
+        val recvars = s.recvars.asScala + LType.convertRecVar(this.rvar)  // !!! GTVState Java unmodifiable
         val s1 = new GTVState(s.isEntry, c, recvars.asJava)
         EFSM(mutable.LinkedHashSet(s1), s1, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
 
@@ -644,9 +586,6 @@ case class LRecVar(rvar: RecVar) extends LType {
     /* ... */
 
     override def subs(x: Map[RecVar, LType]): LType = x.getOrElse(this.rvar, this)
-
-    /*override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LType =
-        throw new RuntimeException(s"Shouldn't get here: $this")*/
 
     /* ... */
 
@@ -677,8 +616,6 @@ object LEnd extends LType {
 
     override def subs(x: Map[RecVar, LType]): LEnd.type = this
 
-    //override protected[local] def unfoldAllOncePrefixAux(done: Set[RecVar]): LEnd.type = this
-
     /* ... */
 
     override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
@@ -703,11 +640,6 @@ object LEnd extends LType {
 
 /* ... */
 
-//public final Set<GTVState> S;
-//public final GTVState init;
-//public final Set<GTVEvent> E;
-//public final Set<GTVAction> A;
-//public final Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction,  GTVState>>> delta;
 case class EFSM(
        S: mutable.LinkedHashSet[GTVState],
        init: GTVState,
@@ -715,14 +647,11 @@ case class EFSM(
        A: mutable.LinkedHashSet[GTVAction],
        delta: mutable.LinkedHashMap[(GTVState, GTVEvent), mutable.LinkedHashSet[(GTVAction, GTVState)]]
 ) {
-
     def toGTEFSM: GTEFSM =
         val S = this.S.asJava
-        val E = this.E.asJava;
-        val A = this.A.asJava;
+        val E = this.E.asJava
+        val A = this.A.asJava
         val delta = this.delta.map { case ((s, e), v) => (new Pair(s, e), v.map((a, s1) => new Pair(a, s1)).asJava) }.asJava
         new GTEFSM(S, this.init, E, A, delta)
-
-    //override def toString: String = s"(init=${this.init}, delta=${this.delta}"
 }
 

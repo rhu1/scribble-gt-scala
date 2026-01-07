@@ -32,13 +32,13 @@ trait GType extends SType {
     /* static */
 
     // Post: values only include Role for nonEmpty Set[Op]
-    def getCommitting: Map[Mid, Map[Role, Set[Op]]] =  // ...removing parens causing "overload ambiguity" ?
+    private def getCommitting: Map[Mid, Map[Role, Set[Op]]] =  // ...removing parens causing "overload ambiguity" ?
         getMids.map(c => (c, getCommittingC(c))).toMap
 
     // Post: keySet only includes Role for nonEmpty Set[Op]
-    def getCommittingC(c: Mid): Map[Role, Set[Op]] =
+    private def getCommittingC(c: Mid): Map[Role, Set[Op]] =
         unfoldAllOnce |> (_.getCommittingAux(false, c, Set()))
-    protected[global]def getNotCommittingC(c: Mid): Map[Role, Set[Op]] =
+    private def getNotCommittingC(c: Mid): Map[Role, Set[Op]] =
         unfoldAllOnce |> (_.getNotCommittingAux(false, c, Set()))
 
     protected[global] def getCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]]
@@ -89,7 +89,7 @@ trait GType extends SType {
 
     def isClearTermination: Boolean
 
-    def isAware: Boolean = isSingleDecision && isClearTermination
+    private def isAware: Boolean = isSingleDecision && isClearTermination
 
     def isBalanced: Boolean = unfoldAllOnce |> (_.isBalancedAux)  // !!! unfold currently redundant
 
@@ -102,7 +102,7 @@ trait GType extends SType {
 
     def project(r: Role): Option[LType] = rproject(getLiveRoles, r).map(_._1)
 
-    def rproject(all: Set[Role], r: Role): Option[(LType, Sigma)] = rprojectAux(all, EPSILON, r)
+    private def rproject(all: Set[Role], r: Role): Option[(LType, Sigma)] = rprojectAux(all, EPSILON, r)
 
     protected[global] def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)]
 
@@ -113,7 +113,6 @@ trait GType extends SType {
         for {
             ps <- all.foldLeft(Option[Map[Role, Participant]](Map.empty)) {
                 case (Some(acc), r) =>
-                    //println(s"aaaaa: $r ,, $this")
                     rproject(all, r).map((L, q) => acc + (r -> Participant(r, rcom(r), L, q)))  // Handles end and equiv. ended-MCs
                 case _ => None
             }
@@ -125,10 +124,7 @@ trait GType extends SType {
     
     protected[global] def getActionsAux(env: Path, rem: Set[Role]): Set[GAction]
 
-    /*def stepPi(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, (GType, Path)]
-        = stepPiAux(com, EPSILON, a)*/
-
-    // !!! pi needed for determinism, e.g., B!A:3 in [ mu X...X |> 3() from B to A ]
+    // pi needed for determinism, e.g., B!A:3 in [ mu X...X |> 3() from B to A ]
     // For leafs, a.pi == env
     // For all, res Path == a.pi
     def stepPi(com: Map[Role, Map[Mid, Set[Op]]], env: Path, a: GAction):
@@ -137,9 +133,6 @@ trait GType extends SType {
     // Effectively limit to unfoldAllOnce -- cf. s3.good.ClearTermination2
     protected[global] def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, entered: Set[RecVar], a: GAction):
             Either[String, (GType, Path)]
-
-    /*def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType]
-        = stepPi(com, EPSILON, a).map((G, _) => G)*/
 
     def isSafeTermination(all: Set[Role]): Boolean
 }
@@ -153,13 +146,6 @@ object GType {
         y.foldLeft(x) { case (acc, (r, ops)) =>
             acc + (r -> (acc.getOrElse(r, Set()) ++ ops))
         }
-
-    /*def mergeCommitting
-            (x: Map[Mid, Map[Role, Set[Op]]], y: Map[Mid, Map[Role, Set[Op]]]):
-            Map[Mid, Map[Role, Set[Op]]] =
-        y.foldLeft(x)({ case (acc, (c, rops)) =>
-            acc + (c -> mergeRoleOps(acc.getOrElse(c, Map()), rops))
-        })*/
 
     def isectDeps(x: Map[Role, Set[Role]], y: Map[Role, Set[Role]]): Map[Role, Set[Role]] =
         // fold better
@@ -217,13 +203,11 @@ case class GInteraction(
 
     override def getNotCommittingAux(entered: Boolean, c: Mid, com: Set[Role]): Map[Role, Set[Op]] =
         if (!com.contains(this.dst) && com.contains(this.src)) {
-            //val imm = Map(this.src -> this.cases.keySet.map((op, _) => op))
-            val imm = Map[Role, Set[Op]]()  // !!! ignoring sender ops...
+            val imm = Map[Role, Set[Op]]()  // ignoring sender ops...
             (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, com + this.dst)))
                 .reduce(GType.unionRoleOps)
         } else {
             val imm = if (!entered) Map() else Map(
-                //this.src -> this.cases.keySet.map((op, _) => op),  // !!! ignoring sender ops...
                 this.dst -> this.cases.keySet.map((op, _) => op)
             )
             (Seq(imm) ++ this.cases.values.map(_.getNotCommittingAux(entered, c, com)))
@@ -245,12 +229,12 @@ case class GInteraction(
         }
         nested
 
-    // !!! in-built transitivity (like strict), unlike formal eventual...
+    // in-built transitivity (like strict), unlike formal eventual...
     override def getSyntacticEventualDeps: Map[Role, Set[Role]] =
         val R = getLiveRoles
         val rany = R.iterator.next
         val nonDiv = this.cases.values
-                         .filter(!_.isDiverging(rany))  // !!! assumes balanced
+                         .filter(!_.isDiverging(rany))  // assumes balanced
                          .map(_.getSyntacticEventualDeps)
         var nested = if (nonDiv.isEmpty) Map() else nonDiv.reduce(GType.isectDeps)
         // ...same as strict except don't remove this.src << this.dst
@@ -270,7 +254,6 @@ case class GInteraction(
 
     override def isClearTermination: Boolean =
         val dbug = this.cases.forall(_._2.isClearTermination)
-        //if (!dbug) println(s"CT2222: ${this}")
         dbug
 
     override protected[global] def isBalancedAux: Boolean =
@@ -347,7 +330,7 @@ case class GInteraction(
 
     protected def stepPiAuxNested(com: Map[Role, Map[Mid, Set[Op]]], env: Path, entered: Set[RecVar], a: GAction):
             Either[String, (GInteraction, Path)] =
-        for {  // Cont1  // !!! redundant?
+        for {  // Cont1  // ...redundant?
             cases <- this.cases.foldLeft[Either[String, ListMap[(Op, Payload), GType]]]
                          (Right(ListMap.empty[(Op, Payload), GType])) {
                          case (acc, (m, p)) => acc match
@@ -355,9 +338,6 @@ case class GInteraction(
                              case Left(x) => Left(x)
                      }
             } yield (GInteraction(this.src, this.dst, cases), a.pi)  // CHECKME a.pi vs. all y._2 (currently not check eslewhere, wiggly/activemixed)
-
-    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
-        stepPi(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean = false
 
@@ -398,21 +378,17 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
                 val ops_r = this.right.cases.keySet.map((op, _) => op)
                 val imm = Map(
                     this.other -> ops_r,
-                    //this.obs -> (this.left.cases.keySet.map((op, _) => op) ++ ops_r)  // !!! ignoring sender ops...
                     this.obs -> this.left.cases.keySet.map((op, _) => op)
                 )
-                // !!! Reset com
+                // Reset com
                 val left = this.left.cases.values.map(_.getCommittingAux(true, c, Set(this.obs)))
                 val right = this.right.cases.values.map(_.getCommittingAux(true, c, Set(this.obs, this.other)))
-                //GType.mergeRoleOps(GType.mergeRoleOps(imm, left), right)
 
                 val dbugl = left.foldLeft(imm)(GType.unionRoleOps)
                 val dbug = dbugl |> (a => right.foldLeft(a)(GType.unionRoleOps))
-                //println(s"WF2222: ${c}: ${imm} ,, ${left} ,, ${dbugl} ,, ${dbug}")
                 dbug
             }
         } else {
-            //GType.mergeRoleOps(this.left.getCommittingAux(c, com), this.right.getCommittingAux(c, com))
             val left = this.left.cases.values.map(_.getCommittingAux(entered, c, com))
             val right = this.right.cases.values.map(_.getCommittingAux(entered, c, com))
             right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
@@ -423,18 +399,15 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
             if (entered) {  // !!!
                 Map()
             } else {
-                // !!! reset com
+                // reset com
                 val left = this.left.cases.values.map(
                     _.getNotCommittingAux(true, c, Set(this.obs)))
                 val right = this.right.cases.values.map(
                     _.getNotCommittingAux(true, c, Set(this.obs, this.other)))
-                //GType.mergeRoleOps(left, right)
                 val dbug = right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
-                //println(s"WF3333: ${c}: ${dbug} ,, ${this}")
                 dbug
             }
         } else {
-            //GType.mergeRoleOps(this.left.getNotCommittingAux(c, com), this.right.getNotCommittingAux(c, com))
             val left = this.left.cases.values.map(_.getNotCommittingAux(entered, c, com))
             val right = this.right.cases.values.map(_.getNotCommittingAux(entered, c, com))
             right.foldLeft(left.reduce(GType.unionRoleOps))(GType.unionRoleOps)
@@ -455,15 +428,8 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
     override def isClearTermination: Boolean =
         val R = getLiveRoles - this.obs
         val dr = this.left.getSyntacticEventualDeps - this.obs
-        val dbug =
-            R.forall(r => this.left.isDiverging(r)
-                || (dr.contains(r) && dr(r).contains(obs))
-            ) && this.left.isClearTermination && this.right.isClearTermination
-        if (!dbug) {
-            println(s"CT1111: R=${R} ,, dr=${dr} ,, LHS=${R.forall(r => this.left.isDiverging(r) || (dr.contains(r) && dr(r).contains(obs)))} " +
-                s",, left=${this.left.isClearTermination} ,, right=${this.right.isClearTermination} \n${this.left}\tP=${this.left.isDiverging(Role("P"))}")
-        }
-        dbug
+        R.forall(r => this.left.isDiverging(r) || (dr.contains(r) && dr(r).contains(obs))) &&
+            this.left.isClearTermination && this.right.isClearTermination
 
     override protected[global] def isBalancedAux: Boolean =
         this.left.getLiveRoles == this.right.getLiveRoles &&
@@ -502,9 +468,6 @@ class GMixed(id: Mid, left: GInteraction, other: Role, obs: Role, right: GIntera
             case _ => Left(s"Cannot step $a in: $this")
         }
 
-    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GActiveMixed] =
-        step(com, a).map(G => (G, pi))*/
-
     override def isSafeTermination(all: Set[Role]): Boolean = false
 
     /* ... */
@@ -536,7 +499,7 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
 
     override def isDivergingAux(entered: Set[RecVar], r: Role): Boolean =
         val R = getLiveRoles
-        if (R.contains(r)) {  // !!! Assumes projectable
+        if (R.contains(r)) {  // Assumes projectable
             this.body.isDivergingAux(entered + this.rvar, r)
         } else {
             false
@@ -561,9 +524,7 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
     override def isSingleDecision: Boolean = this.body.isSingleDecision
 
     override def isClearTermination: Boolean =
-        val dbug = this.body.isClearTermination
-        if (!dbug) println(s"CT3333: ${this}")
-        dbug
+        this.body.isClearTermination
 
     override protected[global] def isBalancedAux: Boolean = this.body.isBalancedAux
 
@@ -574,7 +535,7 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
             (b, q) <- this.body.rprojectAux(all, pi, r)
             b1 = b match {
                 case LEnd => LEnd
-                case LRecVar(v) => if (v == this.rvar) LEnd else LRecVar(v)  // !!! cf. mu t . t'
+                case LRecVar(v) => if (v == this.rvar) LEnd else LRecVar(v)  // cf. mu t . t'
                 case _ => LRec(this.rvar, b)
             }
         } yield (b1, q)
@@ -591,9 +552,6 @@ case class GRec(rvar: RecVar, body: GType) extends GType {
         } else {
             unfold |> (_.stepPiAux(com, env, entered + this.rvar, a))
         }
-
-    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
-        step(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean = false
 
@@ -649,9 +607,6 @@ case class GRecVar(rvar: RecVar) extends GType {
     override def stepPiAux(com: Map[Role, Map[Mid, Set[Op]]], env: Path, entered: Set[RecVar], a: GAction):
             Either[String, (GType, Path)] =
         Left(s"Shouldn't get here: $this")
-
-    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
-        Left(s"Shouldn't get here: $this")*/
 
     override def isSafeTermination(all: Set[Role]): Boolean =
         throw new RuntimeException(s"Shouldn't get here: $this")

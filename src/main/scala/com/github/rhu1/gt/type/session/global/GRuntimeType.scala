@@ -70,14 +70,12 @@ case class GWiggly(
     /* ... */
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
-        //println(s"eeee1: $r ,, $this")
         for {
             (cases, sigmas) <-
                 this.cases.foldLeft
                     (Option[(ListMap[(Op, Payload), LType], ListMap[Op, Sigma])](ListMap.empty, ListMap.empty)) {
                        case (None, _) => None
                        case (Some(acc), (k, g)) =>
-                           //println(s"ffff: $r ,, $k ,, $this")
                            g.rprojectAux(all, pi, r)
                             .map((L, q) => (acc._1 + ((k, L)), acc._2 + (k._1 -> q)))
                    }
@@ -85,48 +83,34 @@ case class GWiggly(
             res <-
                 if (r == this.src) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
-                    //println(s"eeee2: $r ,, $filt")
-                    if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. not checked
+                    if ((filt.size == 1 && !filt.head.isEmptyQueues)  // all non this.op cases if any, cf. not checked
                             || filt.size >= 2) {
                         None
                     } else {
-                        //println(s"eeee3: $r")
                         Some((cases(head._1), sigmas(this.op)))
                     }
                 } else if (r == this.dst) {
                     val filt = sigmas.filter((k, _) => k != this.op).values.toSet
-                    //println(s"eeee4: $r $filt")
-                    if ((filt.size == 1 && !filt.head.isEmptyQueues)  // !!! all non this.op cases if any, cf. just pairwise equal
+                    if ((filt.size == 1 && !filt.head.isEmptyQueues)  // all non this.op cases if any, cf. just pairwise equal
                             || filt.size >= 2) {
                         None
                     } else {
                         val s: Sigma = sigmas(this.op)
-                        //println(s"eeee5: $r ,, $s ,, ${this.src}")
                         if (s.contains(this.src)) {
                             val s1: Sigma = s +
                                 (this.src -> (Msg(this.op, head._1._2, pi) :: s(this.src)))  // Empty already guarded
-                            //println(s"eeee6: $r ,, ${LBranch(this.src, cases)}")
                             Some((LBranch(this.src, cases), s1))
                         } else {
                             None
                         }
                     }
                 } else {
-                    //println(s"eeee7: $r ,, $this\n\t$cases\n\t$sigmas")
                     for {
-                        /*cc <- cases.values.tail.foldLeft(Option(cases.values.head)) {  // cases non-empty
-                            case (None, _) => None
-                            case (Some(acc), x) => LType.runtimeMerge(acc, x)  // !!! runtimeMerge
-                        }*/
-                        /*//ss <- sigmas.values.tail.foldLeft(Option(sigmas.values.head)) {
-                          //  case (None, _) => None
-                          //  case (Some(acc), x) => LType.mergeSigma(acc, x)  // !!! cf. defs*/
-                        cc1 <- cases.find { case ((op, _), _) => op == this.op }  // !!! merge not preserved during runtime, cf. OnlineWallet
+                        cc1 <- cases.find { case ((op, _), _) => op == this.op }  // merge not preserved during runtime, cf. OnlineWallet
                         cc = cc1._2
                         ss <- {
-                            val filt = sigmas.filter((k, _) => k != this.op).values.toSet  // !!! sigma_k, cf. defs
-                            //println(s"eeee8: $r $filt")
-                            if ((filt.size == 1 && !filt.head.isEmptyQueues) // !!! all non this.op cases if any, cf. just pairwise equal
+                            val filt = sigmas.filter((k, _) => k != this.op).values.toSet  // sigma_k, cf. defs
+                            if ((filt.size == 1 && !filt.head.isEmptyQueues) // all non this.op cases if any, cf. just pairwise equal
                                 || filt.size >= 2) {
                                 None
                             } else {
@@ -180,9 +164,6 @@ case class GWiggly(
                 (GWiggly(this.src, this.dst, this.op, this.cases + (h._1 -> x._1)), x._2))  // x._2 == a.pi
         }
 
-    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction): Either[String, GType] =
-        stepPi(com, a).map((G, _) => G)*/
-
     override def isSafeTermination(all: Set[Role]): Boolean = true
 
     /* ... */
@@ -193,12 +174,12 @@ case class GWiggly(
             val c = cases.head
             s"${msgToString(c._1)} . ${c._2}"
         } else {
-            val tmp = this.cases.map((x, y) => s"${msgToString(x)}: ${y}").mkString(", ")
-            s"{${tmp}}"
+            val tmp = this.cases.map((x, y) => s"${msgToString(x)}: $y").mkString(", ")
+            s"{$tmp}"
         }
 
     override def toString: String =
-        s"${this.src} ${ConsoleColours.WAVE_ARROW} ${this.dst} ${this.op} ${casesToString}"
+        s"${this.src} ${ConsoleColours.WAVE_ARROW} ${this.dst} ${this.op} $casesToString"
 }
 
 
@@ -237,56 +218,28 @@ class GActiveMixed(
     /* ... */
 
     override def rprojectAux(all: Set[Role], pi: Path, r: Role): Option[(LType, Sigma)] =
-        //println(s"bbbbb1: $r ,, $this")
         if (this.comL contains r) {
-            //println(s"ccccc1: $this ,, $r")
             this.left.rprojectAux(all, pi :+ pL, r) map {
                 case (_L, q) => (LActiveLeft(this.id, _L), q)
             }
         } else if (this.comR contains r) {
-            //println(s"ccccc2: $this ,, $r")
             this.right.rprojectAux(all, pi :+ pR, r) map {
                 case (_L, q) => (LActiveRight(this.id, _L), q)
             }
         } else {
             for {
                left <- {
-                   //println(s"bbbbb2: ${this.left.rprojectAux(all, pi :+ pL, r)}");
                    this.left.rprojectAux(all, pi :+ pL, r)
                }
                right <- {
-                   //println(s"bbbbb3: ${this.right.rprojectAux(all, pi :+ pR, r)}");
                    this.right.rprojectAux(all, pi :+ pR, r)
                }
                s <- {
-                   //println(s"bbbbb4: ${left._2 circ right._2}")
                    left._2 circ right._2
                }
             } yield (
                 LActiveMixed(this.id, left._1, right._1), s)
         }
-
-    /*protected def inferPeer(x: LType): Role =
-        x match {
-            case x: LSelect => x.dst
-            case x: LBranch => x.src
-            case x: LMixed =>
-                (inferPeer(x.left), inferPeer(x.right)) match {
-                    case (l, r) if l == r => l
-                    case (l, r) => throw new RuntimeException(s"Shouldn't get here l=$l, r=$r in: $x")
-                }
-            case x: LActiveMixed =>
-                (inferPeer(x.left), inferPeer(x.right)) match {
-                    case (l, r) if l == r => l
-                    case (l, r) => throw new RuntimeException(s"Shouldn't get here l=$l, r=$r in: $x")
-                }
-            case x: LActiveLeft => inferPeer(x.left)
-            case x: LActiveRight => inferPeer(x.right)
-            case x: LRec => inferPeer(x.unfold)
-            case x: LRecVar => throw new RuntimeException(s"Shouldn't get here: $x")
-            case LEnd => ???  // XXX cannot infer directly
-            _ => throw new RuntimeException(s"Shouldn't get here: $x")
-        }*/
 
     /* ... */
 
@@ -323,7 +276,7 @@ class GActiveMixed(
                             }
                         Right((GActiveMixed(this.id, _G, this.other,
                             this.obs, comL1, this.comR, this.right), pi))
-                    case GNu(_, _) if this.comR != R => // !!! LNu -- ...allow instantiation as long as someone not committed
+                    case GNu(_, _) if this.comR != R => // LNu -- ...allow instantiation as long as someone not committed
                         Right((GActiveMixed(this.id, _G, this.other, this.obs,
                             this.comL, this.comR, this.right), pi))
                     case _ => Left(s"Cannot step $a in: $this")
@@ -334,21 +287,17 @@ class GActiveMixed(
                         val comR1 = this.comR + src
                         Right((GActiveMixed(this.id, this.left, this.other,
                             this.obs, this.comL, comR1, _G), pi))
-                    case GRecv(_, _, dst, op, pay) if !comL.contains(dst) =>  // RRcv // !!! cf. defs
+                    case GRecv(_, _, dst, op, pay) if !comL.contains(dst) =>  // RRcv // cf. defs
                         val comR1 = this.comR + dst
                         Right((GActiveMixed(this.id, this.left, this.other, this.obs,
                             this.comL, comR1, _G), pi))
-                    case GNu(_, _) if this.comL.isEmpty =>  // !!! RNu
+                    case GNu(_, _) if this.comL.isEmpty =>  // RNu
                         Right((GActiveMixed(this.id, this.left, this.other,
                             this.obs, this.comL, this.comR, _G), pi))
                     case _ => Left(s"Cannot step $a in: $this")
                 }
             case _ => Left(s"Cannot step $a in: $this")
         }
-
-    /*override def step(com: Map[Role, Map[Mid, Set[Op]]], a: GAction):
-            Either[String, GActiveMixed] =
-        stepPi(com, a).map((G, _) => G)*/
 
     override def isSafeTermination(all: Set[Role]): Boolean =
         if (this.comL == all) {

@@ -13,7 +13,7 @@ import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVState}
 import scala.jdk.CollectionConverters.*
 
 // TODO
-// - Either[Exception, ..]
+// - (Option =>) Either[Exception, ..]
 // - balanced up-to
 
 trait CLArg {}
@@ -39,7 +39,7 @@ case class PrintCM(simple: GProtoName, r: Role) extends CLArg {}
 object Main {
 
     // Returns: (unparsed, parsed)  -- order preserved within each side
-    def parseArgs(args: List[String]): (List[String], List[CLArg]) =
+    private def parseArgs(args: List[String]): (List[String], List[CLArg]) =
         val cf = [A, B] => (h: A, t: (List[A], List[B])) => (h :: t._1, t._2)
         val cs = [A, B] => (h: B, t: (List[A], List[B])) => (t._1, h :: t._2)
         args match {
@@ -78,7 +78,7 @@ object Main {
         val translated = getTranslatedProtocols(parsed)
         def findFullName(simple: GProtoName): GProtoName =
             translated.keySet.find(x => x.getLastElement == simple.toString).get
-        println(s"\n${translated}")
+        println(s"\n$translated")
 
         println("\n[GT] Unfolding all once:\n")
         translated.foreach((n, p) => println(s"$n: ${p.unfoldAllOnce}"))
@@ -92,7 +92,7 @@ object Main {
                 println(s"SD=${p.isSingleDecision}")
                 println(s"CT=${p.isClearTermination}")
                 println(s"BA=${p.isBalanced}")
-                throw new RuntimeException(s"Invalid: ${n}")
+                throw new RuntimeException(s"Invalid: $n")
             }
         })
 
@@ -103,9 +103,9 @@ object Main {
                     throw new RuntimeException(s"Couldn't project to $r: $G"))
             ).toMap
         ))
-        projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: ${L}")))
+        projected.foreach((n, rL) => rL.foreach((r, L) => println(s"$n@$r: $L")))
 
-        // !!! map key is full name -- cf. findFullName (from simple name) above
+        // map key is full name -- cf. findFullName (from simple name) above
         val efsms = projected.map((n, rL) => {
             val rcom = translated(n).getRoleCommitting
             (n, rL.map((r, _L) => {
@@ -181,7 +181,7 @@ object Main {
         val ps = rL.map((r, L) => r -> Participant(r, rcom(r), L, Sigma(R) - r))
         LSystem(ps)
 
-    def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
+    private def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
         parsed.values.flatMap(m => m.getGProtoDeclChildren.asScala.map(p => (
             p.getFullMemberName(m),
             Scrib2GT.translateSeq(p.getDefChild.getBlockChild.getInteractSeqChild))

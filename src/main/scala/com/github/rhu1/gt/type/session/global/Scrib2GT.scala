@@ -21,10 +21,10 @@ object Scrib2GT {
         cs.slice(0, cs.size - 1).foldRight(translateNode(cs.last))((x, acc) =>
             x match {
                 case x: GMsgTransfer => translateGMsgTransferPrefix(x, acc)
-                case _ => throw new RuntimeException(s"Cannot translate: ${p}")
+                case _ => throw new RuntimeException(s"Cannot translate: $p")
             })
 
-    def translateNode(p: GSessionNode): GType = p match {
+    private def translateNode(p: GSessionNode): GType = p match {
         case x: GMsgTransfer => translateGMsgTransferPrefix(x, GEnd)
         case x: GChoice => translateGChoice(x)
         case x: GRecursion => translateGRecursion(x)
@@ -33,7 +33,7 @@ object Scrib2GT {
         case _ => throw new RuntimeException(s"TODO: $p")
     }
 
-    def translateGMixed(x: GTGMixed): GMixed =
+    private def translateGMixed(x: GTGMixed): GMixed =
         val left = translateSeq(x.getLeftBlockChild.getInteractSeqChild)
             .unfoldAllImmediate.asInstanceOf[GInteraction]
         val right = translateSeq(x.getRightBlockChild.getInteractSeqChild)
@@ -45,7 +45,7 @@ object Scrib2GT {
         val obs = translateRoleNode(x.getObserverChild)
         GMixed(nextMid, left, oth, obs, right)
 
-    def translateGChoice(x: GChoice): GInteraction =
+    private def translateGChoice(x: GChoice): GInteraction =
         val src = translateRoleNode(x.getSubjectChild)
         val bs = x.getBlockChildren.asScala.map(y =>
             y.getInteractSeqChild
@@ -59,14 +59,14 @@ object Scrib2GT {
             throw new RuntimeException("Inconsistent choice ")
         }
 
-    def translateGRecursion(x: GRecursion): GRec = GRec(
+    private def translateGRecursion(x: GRecursion): GRec = GRec(
         translateRecVarNode(x.getRecVarChild), translateSeq(x.getBlockChild.getInteractSeqChild))
 
-    def translateGContinue(x: GContinue): GRecVar = GRecVar(translateRecVarNode(x.getRecVarChild))
+    private def translateGContinue(x: GContinue): GRecVar = GRecVar(translateRecVarNode(x.getRecVarChild))
 
-    def translateGMsgTransferPrefix(x: GMsgTransfer, y: GType): GInteraction =
+    private def translateGMsgTransferPrefix(x: GMsgTransfer, y: GType): GInteraction =
         val ds = x.getDestinationChildren
-        if (ds.size() > 1) throw new RuntimeException(s"TODO: ${x}")
+        if (ds.size() > 1) throw new RuntimeException(s"TODO: $x")
         val dst = ds.getFirst
         GInteraction(
             translateRoleNode(x.getSourceChild),
@@ -74,23 +74,23 @@ object Scrib2GT {
             ListMap(translateMsgNode(x.getMessageNodeChild) -> y)
         )
 
-    def translateRoleNode(x: RoleNode): Role = Role(x.toString)
+    private def translateRoleNode(x: RoleNode): Role = Role(x.toString)
 
-    def translateOpNode(x: OpNode): Op = Op(x.toString)
+    private def translateOpNode(x: OpNode): Op = Op(x.toString)
 
-    def translatePayload(x: org.scribble.core.`type`.session.Payload): Payload =
+    private def translatePayload(x: org.scribble.core.`type`.session.Payload): Payload =
         Payload(x.elems.asScala.map(translatePayElemType).toList)
 
-    def translatePayElemType(x: PayElemType[?]): Data = x match {
+    private def translatePayElemType(x: PayElemType[?]): Data = x match {
         case x: DataName => Data(x.toString)
-        case _ => throw new RuntimeException(s"TODO: ${x}")
+        case _ => throw new RuntimeException(s"TODO: $x")
     }
 
-    def translateMsgNode(x: MsgNode): (Op, Payload) = x match {
+    private def translateMsgNode(x: MsgNode): (Op, Payload) = x match {
         case x: SigLitNode =>
             (translateOpNode(x.getOpChild), translatePayload(x.getPayloadListChild.toPayload))
         case _ => throw new RuntimeException("sTODO: s{x}")
     }
 
-    def translateRecVarNode(x: RecVarNode): RecVar = RecVar(x.toString)
+    private def translateRecVarNode(x: RecVarNode): RecVar = RecVar(x.toString)
 }
