@@ -89,7 +89,7 @@ public class GTRoleGen {
 
         //res.add(genMakeChoice_s(s));
 
-        // !!! TODO missing ?/!* case
+        // TODO ?/!* case
         /*Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> rhs =
                 filt.entrySet().stream().filter(x ->
                         x.getValue().stream().anyMatch(y -> y.left instanceof GTVSendStar)).collect(
@@ -122,7 +122,7 @@ public class GTRoleGen {
                 throw new RuntimeException("Shouldn't get here: " + k + " ,, " + vs);
             }
             Pair<GTVAction, GTVState> succ = vs.iterator().next();
-            String a1 = GTGenUtil.eventToParam(e);  // !!! pay?
+            String a1 = GTGenUtil.eventToParam(e);  // pay?
             List<String> ps = List.of("cast", "{" + e.role + "Pid, " + a1 + ", Data");
             String next = genNextState(m, succ.right);
             String b = "case make_choice_" + a1 + "(Data) of\n"
@@ -173,14 +173,14 @@ public class GTRoleGen {
                 GTGenUtil.filterEdgesByAnyAction(filt, x -> x instanceof GTVEpsilon);
         res.addAll(generateBranchAux(m, s, lhs));
 
-        Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> lhs_tau =  // !!! -- ! |> ?
+        Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> lhs_tau =  // -- ! |> ?
                 GTGenUtil.filterEdgesByEvent(filt, x -> x instanceof GTVTau);
         res.addAll(generateSelectAux(m, s, lhs_tau));
 
         return res;
     }
 
-    // !!! move to gen_role
+    // ...move to gen_role
     protected ErlangFunc genMakeChoice_s(GTVState s) {
         String name = "make_choice_" + GTGenUtil.stateToFuncName(s);
         List<String> params = List.of("Data");
@@ -188,8 +188,8 @@ public class GTRoleGen {
         return new ErlangFunc(name, params, body);
     }
 
-    // !!! move to gen_role
-    // !!! pay?  -- ! and !*
+    // ...move to gen_role
+    // ...pay?  -- ! and !*
     protected ErlangFunc genMakeChoice_a(Op op) {
         String name = "make_choice_" + op;
         List<String> params = List.of("Data");
@@ -202,7 +202,7 @@ public class GTRoleGen {
             case END:
                 return "{stop, normal, Data}";
             case SELECT:
-            case INTERNAL_MIXED:  // !!! what if don't want to interrupt (yet)?
+            case INTERNAL_MIXED:  // ...what if don't want to interrupt (yet)?
             case EXTERNAL_MIXED_OI:
                 Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filt
                         = GTGenUtil.filterEdgesByState(m, succ);
@@ -211,7 +211,7 @@ public class GTRoleGen {
                         "case make_choice_" + s + "(Data) of\n"
                                 + filt.keySet().stream().filter(x -> x.right instanceof GTVTau).map(x -> {
                             GTVTau tau = (GTVTau) x.right;
-                            String a = GTGenUtil.eventToParam(tau);  // !!! pay?
+                            String a = GTGenUtil.eventToParam(tau);  // pay?
                             return a + " -> {next_state, " + s + ", Data, [next_event, internal, {" + a + "}]}";
                         }).collect(Collectors.joining("\n"));
             case BRANCH:

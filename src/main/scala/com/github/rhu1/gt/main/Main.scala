@@ -153,7 +153,8 @@ object Main {
             case x => throw new RuntimeException(s"Unknown arg: $x")
         }
 
-        /*for ((n, rM) <- efsms) {
+        /*// Debug output for API gen
+        for ((n, rM) <- efsms) {
             for ((r, _M) <- rM) {
                 val r1 = LType.convertRole(r)
                 println(s"\n[debug] Role gen:\n${new GTRoleGen().generate(n, r1, _M)}")
@@ -175,7 +176,6 @@ object Main {
 
     private def toLSystem(n: GProtoName, G: GType, rL: Map[Role, LType]): LSystem =
         val R = G.getLiveRoles
-        //val com = G.getCommitting
         val rcom = G.getRoleCommitting
         println(s"$n:\nCommitting: $rcom")
         val ps = rL.map((r, L) => r -> Participant(r, rcom(r), L, Sigma(R) - r))

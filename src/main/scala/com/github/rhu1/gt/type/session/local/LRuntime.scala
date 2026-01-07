@@ -52,7 +52,7 @@ case class Sig(op: Op, pay: Payload) {
     override def toString: String = s"$op($pay)"
 }*/
 
-// !!! m = alpha  // Actual queue contents (cf. LAction, no pi)
+// !!! Msg = alpha  // Actual queue contents (cf. LAction, no pi)
 case class Msg(op: Op, pay: Payload, pi: Path) {
 
     def isStale(L: LType): Boolean = Msg.isStaleAux(this.pi, L)
@@ -185,8 +185,7 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     def gcAll: LSystem = LSystem(ps.map((r, Y) => r -> Y.quietGC))
 
     def pre(x: LSystem): Boolean =
-        //println(s"\n2222:\n$this\n$x\n")
-        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => { //println(s"3333: $r ${Y.pre(x.ps(r))}");
+        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => {
             Y.pre(x.ps(r)) })
 
     override def toString: String =

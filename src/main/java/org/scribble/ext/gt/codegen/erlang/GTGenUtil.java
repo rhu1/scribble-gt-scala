@@ -20,20 +20,20 @@ public class GTGenUtil {
 
     public static String eventToParam(GTVEvent e) {
         if (e instanceof GTVRecv cast) {
-            return cast.op.toString();  // !!! pay?
+            return cast.op.toString();  // pay?
         } else if (e instanceof GTVTau cast) {
-            return cast.op.toString();  // !!! pay?
+            return cast.op.toString();  // pay?
         } else {
             throw new RuntimeException("Shouldn't get here: ");
         }
     }
 
     public static String sendToParam(GTVSend a) {
-        return a.op.toString();  // !!! pay?
+        return a.op.toString();  // pay?
     }
 
     public static String sendToParam(GTVSendStar a) {
-        return a.op.toString();  // !!! pay?
+        return a.op.toString();  // pay?
     }
 
 
@@ -43,7 +43,7 @@ public class GTGenUtil {
         END,
         BRANCH,  //            &      -- events ?        -- actions eps
         SELECT,  //            (+)    -- events tau      -- actions !
-        INTERNAL_MIXED,  //    ? |> ! -- events ? |> tau -- actions eps |> !*  -- !!! XXX all states can have ?/eps*, incl. int_mixed
+        INTERNAL_MIXED,  //    ? |> ! -- events ? |> tau -- actions eps |> !*  -- XXX all states can have ?/eps*, incl. int_mixed
         EXTERNAL_MIXED_OI,  // ! |> ? -- events tau |> ? -- actions ! |> eps*
         EXTERNAL_MIXED_II,  // ? |> ? -- events ? |> ?   -- actions eps |> eps*
         EXTERNAL_MIXED_NOT_ENTRY  // Can be ? |> ? or ! |> ? -- events/actions same as prev
