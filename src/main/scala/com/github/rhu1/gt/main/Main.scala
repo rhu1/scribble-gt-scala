@@ -289,7 +289,13 @@ object Main {
         val ps = rL.map((r, L) => r -> Participant(r, rcom(r), L, Sigma(R) - r))
         LSystem(ps)
 
-    private def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
+    /**
+     * Translate parsed Scribble modules into GT global protocol types.
+     *
+     * Exposed for other entrypoints (e.g. code generators) that need access
+     * to the same translation logic as the main CLI.
+     */
+    def getTranslatedProtocols(parsed: Map[ModuleName, Module]): Map[GProtoName, GType] =
         parsed.values.flatMap(m => m.getGProtoDeclChildren.asScala.map(p => (
             p.getFullMemberName(m),
             Scrib2GT.translateSeq(p.getDefChild.getBlockChild.getInteractSeqChild))
