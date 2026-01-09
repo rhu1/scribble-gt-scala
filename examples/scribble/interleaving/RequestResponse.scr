@@ -1,0 +1,6 @@
+module Request;
+
+global protocol Request(role Alice, role Bob){
+    request() from Bob to Alice;
+    response() from Alice to Bob;
+}

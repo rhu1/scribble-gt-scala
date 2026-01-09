@@ -135,6 +135,7 @@ object Main {
                 (r, _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end).toGTEFSM)
             }))
         })
+      println("BOOOOOOOOOOO==============" + efsms)
 
         // Helper function to generate callback modules with access to translated protocols
         def generateCallbackModule(n: GProtoName, r: Role, efsm: GTEFSM): Unit = {
@@ -181,6 +182,7 @@ object Main {
                     }.asJava
 
                 val behaviourModule = new GTGenericBehaviour()
+                println("==============" + efsm)
                 behaviourModule.generateCode(protocolName, javaRole, efsm, explicitCommiting, sigmaRoles)
                 println(s"\n[GT] Generated Behaviour Module for $n@$r in ./generated/$protocolName/")
             } catch {

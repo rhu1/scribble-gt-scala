@@ -1,0 +1,6 @@
+module Heartbeat;
+
+global protocol Heartbeat(role Alice, role Carol){
+    pong() from Carol to Alice;
+    ping() from Alice to Carol;
+}

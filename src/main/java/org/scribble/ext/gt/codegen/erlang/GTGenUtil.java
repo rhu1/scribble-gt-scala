@@ -73,6 +73,11 @@ public class GTGenUtil {
         }
     }
 
+    /** Public helper for Scala: return state kind as a stable String label. */
+    public static String getStateKindName(GTEFSM m, GTVState s) {
+        return getStateKind(m, s).name();
+    }
+
     // Return the number of mixed choices in the GTEFSM m
     public static int getNumMixedChoices(GTEFSM m) {
         return (int) m.S.stream().filter(x -> x.isEntry).count();
@@ -135,7 +140,7 @@ public class GTGenUtil {
                 branchRecvs.add(recv);
             }
         });
-        // 2. mixed entry and not child of MC
+        // 2. mixed entry and not child of MC: gcEvents == all receive events from both sides of the MC
         if (isEntry && s.c == getNumMixedChoices(m)) {
             return new HashSet<>(branchRecvs);
         }
@@ -194,19 +199,19 @@ public class GTGenUtil {
         return recvs;
     }
 
-    protected static Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filterEdgesByState(
+    public static Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filterEdgesByState(
             GTEFSM m, GTVState s) {
         return m.delta.entrySet().stream().filter(x -> x.getKey().left.equals(s))
                       .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> null, LinkedHashMap::new));
     }
 
-    protected static Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filterEdgesByEvent(
+    public static Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filterEdgesByEvent(
             Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filt, Predicate<GTVEvent> p) {
         return filt.entrySet().stream().filter(x -> p.test(x.getKey().right)).collect(Collectors.toMap(
                 Map.Entry::getKey, Map.Entry::getValue, (x, y) -> null, LinkedHashMap::new));
     }
 
-    protected static Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filterEdgesByAnyAction(
+    public static Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filterEdgesByAnyAction(
             Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filt, Predicate<GTVAction> p) {
         return filt.entrySet().stream().filter(x -> x.getValue().stream().anyMatch(y -> p.test(y.left)))
                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> null, LinkedHashMap::new));

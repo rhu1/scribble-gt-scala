@@ -31,6 +31,7 @@
 -callback init(Args :: list()) ->
   {ok, s4, state_data(), [{next_event, internal, {a1}}]}.
 
+%% ---- OTP boilerplate ----
 -spec start_link(CallbackModule :: module(), Args :: list()) ->
   {ok, pid()} | {error, term()}.
 start_link(CallbackModule, Args) ->
@@ -52,25 +53,16 @@ init({CallbackModule, _Args}) ->
   put(commit_map, #{}),
   CallbackModule:init([]).
 
-%% -------- GC helpers: commit stack, stale check, current path --------
-get_commit() ->
-  case get(commit_map) of
-    undefined -> #{};
-    M -> M
-  end.
-
+%% ---- GC helpers (stacked commits & stale) ----
+get_commit() -> case get(commit_map) of undefined -> #{}; M -> M end.
 set_commit(M) -> put(commit_map, M), M.
 
-%% Push a new activation side for MC1 (recursion-safe)
 -spec commit_entry(atom(), left | right) -> map().
 commit_entry(McId, Side) when Side =:= left; Side =:= right ->
   Stack0 = maps:get(McId, get_commit(), []),
   Stack1 = [Side | Stack0],
   set_commit(maps:put(McId, Stack1, get_commit())).
 
-%% Purge rule:
-%% - older: message has fewer {Mc,_} than our stack
-%% - same depth: last incoming side != our current side
 -spec stale([{atom(), left | right}]) -> boolean().
 stale(Path) when is_list(Path) ->
   Commit = get_commit(),
@@ -97,17 +89,21 @@ stale(Path) when is_list(Path) ->
           end)
     end, false, McGroups).
 
-%% Build π with repeated tags (oldest -> newest per MC)
+%% ---- Path builders ----
 -spec current_path() -> [{atom(), left | right}].
 current_path() ->
   Commit = get_commit(),
   maps:fold(
     fun(Mc, Sides, Acc) ->
       OldestFirst = lists:reverse(Sides),
-      Acc ++ [ {Mc, Side} || Side <- OldestFirst ]
+      Acc ++ [{Mc, Side} || Side <- OldestFirst]
     end, [], Commit).
 
-%% -------- State s4 --------
+-spec current_path_plus([{atom(), left | right}]) -> [{atom(), left | right}].
+current_path_plus(Extra) ->
+  current_path() ++ Extra.
+
+%% -------- State s4 (entry MC) --------
 -spec s4(EventType :: term(), {pid(), {term()}, list()} | {atom()}, state_data()) ->
   {next_state, s5, state_data()} | {keep_state, state_data(), [postpone]} | {stop, normal, state_data()}.
 s4(_EventType, {_Pid, {a4}, _Pi}, Data) ->
@@ -116,9 +112,16 @@ s4(_EventType, {_Pid, {a4}, _Pi}, Data) ->
 s4(_EventType, {_Pid, {a5}, _Pi}, Data) ->
   io:format("gen_a[s4]: Postponing future event ~p~n", [[a5]]),
   {keep_state, Data, [postpone]};
+%% Internal a1 (LEFT): delegate, then commit LEFT if transitioning
 s4(EventType, {a1}, Data) ->
   CallbackModule = get(callback_module),
-  CallbackModule:s4(EventType, {a1}, Data);
+  Next = CallbackModule:s4(EventType, {a1}, Data),
+  case Next of
+    {next_state, s5, _}      -> commit_entry(?MC1, left), Next;
+    {next_state, s5, _, _}   -> commit_entry(?MC1, left), Next;
+    _                        -> Next
+  end;
+%% Recv TOa (RIGHT): stale-first, delegate, then commit RIGHT if transitioning
 s4(EventType, {BPid, {'TOa'}, Pi}, Data) ->
   case stale(Pi) of
     true ->
@@ -126,10 +129,15 @@ s4(EventType, {BPid, {'TOa'}, Pi}, Data) ->
       {keep_state, Data};
     false ->
       CallbackModule = get(callback_module),
-      CallbackModule:s4(EventType, {BPid, {'TOa'}}, Data)
+      Next = CallbackModule:s4(EventType, {BPid, {'TOa'}}, Data),
+      case Next of
+        {next_state, s5, _}    -> commit_entry(?MC1, right), Next;
+        {next_state, s5, _, _} -> commit_entry(?MC1, right), Next;
+        _                      -> Next
+      end
   end.
 
-%% -------- State s5 (not an MC entry) --------
+%% -------- State s5 --------
 -spec s5(EventType :: term(), {atom()} | {pid(), {term()}, list()}, state_data()) ->
   {next_state, s6, state_data()} | {keep_state, state_data(), [postpone]} | {stop, normal, state_data()}.
 s5(_EventType, {_Pid, {a4}, _Pi}, Data) ->
@@ -139,11 +147,10 @@ s5(_EventType, {_Pid, {a5}, _Pi}, Data) ->
   io:format("gen_a[s5]: Postponing future event ~p~n", [[a5]]),
   {keep_state, Data, [postpone]};
 s5(EventType, {a2}, Data) ->
-  commit_entry(?MC1, left),
   CallbackModule = get(callback_module),
   CallbackModule:s5(EventType, {a2}, Data);
+%% Optionally receive late TOa: stale-first then delegate
 s5(EventType, {BPid, {'TOa'}, Pi}, Data) ->
-  commit_entry(?MC1, right),
   case stale(Pi) of
     true ->
       io:format("gen_a[s5]: Purging stale event ~p~n", [['TOa']]),
@@ -197,11 +204,13 @@ send_s5_a2(CPid, _Data) ->
   Path = current_path(),
   gen_statem:cast(CPid, {self(), {a2}, Path}).
 
+%% Deciding-state send: tag LEFT immediately
 -spec send_s4_a1(BPid :: pid(), _Data :: state_data()) -> ok.
 send_s4_a1(BPid, _Data) ->
-  Path = current_path(),
+  Path = current_path_plus([{?MC1, left}]),
   gen_statem:cast(BPid, {self(), {a1}, Path}).
 
+%% ---- OTP misc ----
 -spec code_change(OldVsn :: term(), StateName :: atom(), StateData :: state_data(), Extra :: term()) ->
   {ok, state_data()}.
 code_change(_Vsn, _StateName, StateData, _Extra) -> {ok, StateData}.

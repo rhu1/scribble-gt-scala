@@ -26,6 +26,7 @@
 -callback init(Args :: list()) ->
   {ok, s4, state_data()}.
 
+%% ---- OTP boilerplate ----
 -spec start_link(CallbackModule :: module(), Args :: list()) ->
   {ok, pid()} | {error, term()}.
 start_link(CallbackModule, Args) ->
@@ -47,25 +48,16 @@ init({CallbackModule, _Args}) ->
   put(commit_map, #{}),
   CallbackModule:init([]).
 
-%% -------- GC helpers: commit stack, stale check, current path --------
-get_commit() ->
-  case get(commit_map) of
-    undefined -> #{};
-    M -> M
-  end.
-
+%% ---- GC helpers (stacked commits & stale) ----
+get_commit() -> case get(commit_map) of undefined -> #{}; M -> M end.
 set_commit(M) -> put(commit_map, M), M.
 
-%% Push a new activation side for MC1 (recursion-safe)
 -spec commit_entry(atom(), left | right) -> map().
 commit_entry(McId, Side) when Side =:= left; Side =:= right ->
   Stack0 = maps:get(McId, get_commit(), []),
   Stack1 = [Side | Stack0],
   set_commit(maps:put(McId, Stack1, get_commit())).
 
-%% Purge rule:
-%% - older: message has fewer {Mc,_} than our stack
-%% - same depth: last incoming side != our current side
 -spec stale([{atom(), left | right}]) -> boolean().
 stale(Path) when is_list(Path) ->
   Commit = get_commit(),
@@ -92,22 +84,20 @@ stale(Path) when is_list(Path) ->
           end)
     end, false, McGroups).
 
-%% Build π with repeated tags (oldest -> newest per MC)
+%% ---- Path builder ----
 -spec current_path() -> [{atom(), left | right}].
 current_path() ->
   Commit = get_commit(),
   maps:fold(
     fun(Mc, Sides, Acc) ->
       OldestFirst = lists:reverse(Sides),
-      Acc ++ [ {Mc, Side} || Side <- OldestFirst ]
+      Acc ++ [{Mc, Side} || Side <- OldestFirst]
     end, [], Commit).
 
-%% -------- State s4 --------
+%% -------- State s4 (entry MC, both branches via recv) --------
 -spec s4(EventType :: term(), {pid(), {term()}, list()}, state_data()) ->
   {next_state, s5, state_data()} | {keep_state, state_data(), [postpone]} | {stop, normal, state_data()}.
-s4(_EventType, {_Pid, {a3}, _Pi}, Data) ->
-  io:format("gen_c[s4]: Postponing future event ~p~n", [[a3]]),
-  {keep_state, Data, [postpone]};
+%% Recv a2 (LEFT): stale-first, delegate, commit LEFT if transitioning
 s4(EventType, {APid, {a2}, Pi}, Data) ->
   case stale(Pi) of
     true ->
@@ -115,8 +105,14 @@ s4(EventType, {APid, {a2}, Pi}, Data) ->
       {keep_state, Data};
     false ->
       CallbackModule = get(callback_module),
-      CallbackModule:s4(EventType, {APid, {a2}}, Data)
+      Next = CallbackModule:s4(EventType, {APid, {a2}}, Data),
+      case Next of
+        {next_state, s5, _}    -> commit_entry(?MC1, left), Next;
+        {next_state, s5, _, _} -> commit_entry(?MC1, left), Next;
+        _                      -> Next
+      end
   end;
+%% Recv TOc (RIGHT): stale-first, delegate, commit RIGHT if transitioning
 s4(EventType, {BPid, {'TOc'}, Pi}, Data) ->
   case stale(Pi) of
     true ->
@@ -124,14 +120,19 @@ s4(EventType, {BPid, {'TOc'}, Pi}, Data) ->
       {keep_state, Data};
     false ->
       CallbackModule = get(callback_module),
-      CallbackModule:s4(EventType, {BPid, {'TOc'}}, Data)
+      Next = CallbackModule:s4(EventType, {BPid, {'TOc'}}, Data),
+      case Next of
+        {next_state, s5, _}    -> commit_entry(?MC1, right), Next;
+        {next_state, s5, _, _} -> commit_entry(?MC1, right), Next;
+        _                      -> Next
+      end
   end.
 
 %% -------- State s5 --------
 -spec s5(term(), {pid(), {atom(), term()}, list()}, state_data()) ->
   {keep_state, state_data(), [postpone]} | {stop, normal, state_data()} | {next_state, s6, state_data(), [{next_event, internal, {a5}}]} | {keep_state, state_data()}.
+%% Incoming TOc or a3: stale-first then delegate
 s5(EventType, {BPid, {'TOc'}, Pi}, Data) ->
-  commit_entry(?MC1, left),
   case stale(Pi) of
     true ->
       io:format("gen_c[s5]: Purging stale event ~p~n", [['TOc']]),
@@ -156,12 +157,13 @@ s6(EventType, {a5}, Data) ->
   CallbackModule = get(callback_module),
   CallbackModule:s6(EventType, {a5}, Data).
 
-%% -------- Send helpers (attach full π) --------
+%% -------- Send helpers --------
 -spec send_s6_a5(APid :: pid(), _Data :: state_data()) -> ok.
 send_s6_a5(APid, _Data) ->
   Path = current_path(),
   gen_statem:cast(APid, {self(), {a5}, Path}).
 
+%% ---- OTP misc ----
 -spec code_change(OldVsn :: term(), StateName :: atom(), StateData :: state_data(), Extra :: term()) ->
   {ok, state_data()}.
 code_change(_Vsn, _StateName, StateData, _Extra) -> {ok, StateData}.
