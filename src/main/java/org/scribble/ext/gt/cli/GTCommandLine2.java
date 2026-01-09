@@ -18,13 +18,28 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class GTCommandLine2 extends CommandLine {
 
     // Used in GTJob
     public static List<Pair<String, String[]>> ARGS;
 
+
+    public GTCommandLine2(String... args) {
+        super(args);
+
+        GTCommandLine2.ARGS = this.args;
+        try {
+            run();
+        } catch (CommandLineException | AntlrSourceException x) {
+            throw new RuntimeScribException(x);
+        }
+    }
+
+    public static void main(String[] args) {
+        GTCommandLine2 cl = new GTCommandLine2(args);
+        cl.gtMain();
+    }
 
     // i.e., check Correspondence (modulo GTCLFlags.NO_CORRESPONDENCE flag)
     public Map<ModuleName, Module> gtMain() {
@@ -57,29 +72,6 @@ public class GTCommandLine2 extends CommandLine {
     /* Parent Scribble stuff */
 
     protected GTMain main;  // Hack for parsed modules, should use Job instead
-
-    public GTCommandLine2(String... args) {
-        super(args);
-
-        GTCommandLine2.ARGS = this.args;
-        try {
-            run();
-        } catch (CommandLineException | AntlrSourceException x) {
-            throw new RuntimeScribException(x);
-        }
-    }
-
-    public static void main(String[] args) {
-        GTCommandLine2 cl = new GTCommandLine2(args);
-        //Optional<Exception> run =
-        cl.gtMain();
-        //run.forEach(_x -> throw new RuntimeException(run.get()));
-    }
-
-    /*public static Optional<Exception> mainTest(String[] args) {
-        GTCommandLine2 cl = init(args);
-        return cl.gtMain();
-    }*/
 
     //static Map<GProtoName, GTGType> getTranslated(GTCommandLine2 cl) {
     static Map<ModuleName, Module> getTranslated(GTCommandLine2 cl) {

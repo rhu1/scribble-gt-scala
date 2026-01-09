@@ -1,8 +1,5 @@
 package com.github.rhu1.gt.`type`.session
 
-import com.github.rhu1.gt.`type`.session.global.GSystem
-import com.github.rhu1.gt.`type`.session.local.LSystem
-
 import scala.collection.immutable.ListMap
 
 
@@ -32,8 +29,8 @@ object SType {
             val c = cases.head
             s"${msgToString(c._1)} . ${c._2}"
         } else {
-            val tmp = cases.map((x, y) => s"${msgToString(x)}: ${y}").mkString(", ")
-            s"{${tmp}}"
+            val tmp = cases.map((x, y) => s"${msgToString(x)}: $y").mkString(", ")
+            s"{$tmp}"
         }
 }
 
@@ -63,7 +60,7 @@ val EPSILON: Path = List.empty[pLR]
 /* ... */
 
 trait SAction {
-    val pi: Path  // !!! for deterministic GType step, and for correspondence -- EPSILON for LRho
+    val pi: Path  // for deterministic GType step, and for correspondence -- EPSILON for LRho
     val subj: Role  // ...dummy for GNu -- useful for all others
 }
 
@@ -103,7 +100,7 @@ object SSystem {
                 println(s"$top\t$i terminated.")
             } else {
                 if (pi.size > 3) {
-                    println(s"$top\tPruning $i at ${pi} ...")
+                    println(s"$top\tPruning $i at $pi ...")
                 } else if (trace.size > 10) {  // cf. non-terminating rec within MC
                     println(s"$top\tPruning $i at $trace ...")
                 } else {

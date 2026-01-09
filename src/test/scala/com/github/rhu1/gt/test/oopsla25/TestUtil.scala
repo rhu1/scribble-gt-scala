@@ -5,25 +5,11 @@ import org.scalatest.funsuite.AnyFunSuite;
 
 object TestUtil extends AnyFunSuite {
 
-    //public static final String BASE_PATH = "./src/test/java/oopsla25";
     val BASE_PATH = "src/test/scala/com/github/rhu1/gt/test/oopsla25"
 
     def testGood(scribFile: String): Unit =
-        //GTCommandLine2.main(new String[]{scribFile});
         Main.main(Array(scribFile, "-gt-check-fidelity", "-gt-check-completeness"))
 
     def testBad(scribFile: String): Unit =
-        //GTCommandLine2.main(new String[]{scribFile});
         assertThrows[Exception](Main.main(Array(scribFile, "-gt-check-fidelity", "-gt-check-completeness")))
-
-    /*// TODO GTException
-    public static void testBad(String scribFile) {
-        // cf. Assertion.assertThrows
-        try {
-            GTCommandLine2.main(new String[]{scribFile});
-        } catch (RuntimeException x) {
-            return;
-        }
-        Assert.fail("Expected exception.");
-    }*/
 }

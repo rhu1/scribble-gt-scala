@@ -88,7 +88,7 @@ public class GTGenRoleGen {
             GTVAction a; //= vs.stream().filter();
             if (vs.size() == 1) {
                 a = vs.stream().iterator().next().left;
-            } else {  // !!! internal-mix has ? with both eps and !*
+            } else {  // internal-mix has ? with both eps and !*
                 List<Pair<GTVAction, GTVState>> tmp = vs.stream().filter(y -> y.left instanceof GTVSendStar).collect(Collectors.toList());
                 if (tmp.size() != 1) {
                     throw new RuntimeException("Shouldn't get in here: " + s);
@@ -124,14 +124,14 @@ public class GTGenRoleGen {
         return res;
     }
 
-    // !!! FIXME can also have (outer) ?/eps* ?
+    // CHECKME can also have (outer) ?/eps* ?
     protected List<ErlangFunc> generateInternalMixed(GTEFSM m, GTVState s) {
         Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> filt =
                 GTGenUtil.filterEdgesByState(m, s);
         List<ErlangFunc> res = new LinkedList<>();
 
         Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> rhs =
-                GTGenUtil.filterEdgesByAnyAction(filt, x -> x instanceof GTVSendStar);  // !!! for ?, a can be either eps or !* (i.e., non-det vs)
+                GTGenUtil.filterEdgesByAnyAction(filt, x -> x instanceof GTVSendStar);  // for ?, a can be either eps or !* (i.e., non-det vs)
         res.addAll(generateSelectAux(s, rhs));
 
         String name = GTGenUtil.stateToFuncName(s);
@@ -153,7 +153,7 @@ public class GTGenRoleGen {
                 GTGenUtil.filterEdgesByEvent(filt, x -> x instanceof GTVRecv);
         res.addAll(lhs.entrySet().stream().map(x -> {
             GTVRecv e = (GTVRecv) x.getKey().right;
-            String param_a = GTGenUtil.eventToParam(e);  // !!! pay
+            String param_a = GTGenUtil.eventToParam(e);  // pay
             List<String> params = List.of("EventType", "{" + param_a + "}", "Data = #state_data{mc_counter_" + s.c + " = MC}");
             String body = "NewData = Data#State_data{mc_counter_" + s.c + " = MC + 1,\n"
                     + "CallbackModule = get(callback_module),\n"
@@ -205,7 +205,7 @@ public class GTGenRoleGen {
         return rhs.entrySet().stream().map(x -> {
             Pair<GTVState, GTVEvent> k = x.getKey();
             GTVRecv e = (GTVRecv) k.right;
-            String param_a = GTGenUtil.eventToParam(e);  // !!! pay?
+            String param_a = GTGenUtil.eventToParam(e);  // pay?
             List<String> params = List.of("EventType", "{" + e.role + ", " + param_a + ", Counter}", "Data = #state_data{mc_counter_" + s.c + " = MC}");
             String when = "Clounter >= MC";
             String body = "NewData = Data#state_data{mc_counter_" + s.c + " = MC + 1},\n"
@@ -241,7 +241,7 @@ public class GTGenRoleGen {
                 GTGenUtil.filterEdgesByAnyAction(filt, x -> x instanceof GTVEpsilon);
         res.addAll(generateBranchAux(s, lhs));
 
-        Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> lhs_tau =  // !!!
+        Map<Pair<GTVState, GTVEvent>, Set<Pair<GTVAction, GTVState>>> lhs_tau =
                 GTGenUtil.filterEdgesByEvent(filt, x -> x instanceof GTVTau);
         res.addAll(generateSelectAux(s, lhs_tau));
 
@@ -252,7 +252,7 @@ public class GTGenRoleGen {
         res.addAll(rhs.entrySet().stream().map(x -> {
             Pair<GTVState, GTVEvent> k = x.getKey();
             GTVRecv e = (GTVRecv) k.right;
-            String param_a = GTGenUtil.eventToParam(e);  // !!! pay?
+            String param_a = GTGenUtil.eventToParam(e);  // pay?
             List<String> params = List.of("EventType", "{" + e.role + ", " + param_a + ", Counter}", "Data = #state_data{mc_counter_" + s.c + " = MC}");
             String when = "Clounter >= MC";
             String body = "CallbackModule get(callback_module),\n"

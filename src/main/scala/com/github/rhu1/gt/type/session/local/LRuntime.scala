@@ -9,7 +9,7 @@ import scala.annotation.tailrec
 sealed trait YAction extends SAction {}
 
 case class LRho(subj: Role) extends YAction {
-    val pi = EPSILON
+    val pi: Path = EPSILON
 }
 
 sealed trait LAction extends YAction { 
@@ -36,7 +36,7 @@ case class LRecv(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends L
     override def toString: String = s"$src?$dst:${Msg(op, pay, pi).toString}"  // pq?a -- p is sender
 }
 
-// !!! subj and c
+// subj and c
 case class LNu(pi: Path, subj: Role, c: Mid) extends LAction {
     override def toGAction: GNu = GNu(this.pi, this.c)
 }
@@ -44,15 +44,7 @@ case class LNu(pi: Path, subj: Role, c: Mid) extends LAction {
 
 /* ... */
 
-/*// !!! using Sig (not Msg) for LAction -- correspondence just erases pi...
-case class Sig(op: Op, pay: Payload) {
-
-    //def toMsg: Msg = Msg(this.op, this.pay, EPSILON)
-
-    override def toString: String = s"$op($pay)"
-}*/
-
-// !!! m = alpha  // Actual queue contents (cf. LAction, no pi)
+// Msg = alpha  // Actual queue contents (cf. LAction, no pi)
 case class Msg(op: Op, pay: Payload, pi: Path) {
 
     def isStale(L: LType): Boolean = Msg.isStaleAux(this.pi, L)
@@ -96,7 +88,7 @@ object Sigma {
 
 implicit class SigmaOps[A <: Sigma](a: A) {
 
-    // !!! cf. isEmpty (empty keySet)
+    // cf. isEmpty (empty keySet)
     def isEmptyQueues: Boolean = a.values.forall(_.isEmpty)
 
     def circ(b: A): Option[Sigma] =
@@ -134,7 +126,7 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
             (pi, L1, q1) => (pi, Participant(this.r, this.com, L1, q1)))
 
     // Accepts "skip" LRho (though not returned by getActions)
-    def gc(a: LRho): Either[String, Participant] =
+    private def gc(a: LRho): Either[String, Participant] =
         Either.cond(a.subj == this.r,
             Participant(this.r, this.com, this.L, this.q.gc(this.L)),
             s"Cannot gc $a in: $this"
@@ -152,7 +144,7 @@ case class Participant(r: Role, com: Map[Mid, Set[Op]], L: LType, q: Sigma) {
 case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction] {
 
     // Post: Set[YAction] nonEmpty
-    def getRoleActions: Map[Role, Set[YAction]] =
+    private def getRoleActions: Map[Role, Set[YAction]] =
         this.ps.map((r, p) => (r, p.getActions))
                .filter((r, as) => as.nonEmpty)
 
@@ -185,8 +177,7 @@ case class LSystem(ps: Map[Role, Participant]) extends SSystem[LSystem, YAction]
     def gcAll: LSystem = LSystem(ps.map((r, Y) => r -> Y.quietGC))
 
     def pre(x: LSystem): Boolean =
-        //println(s"\n2222:\n$this\n$x\n")
-        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => { //println(s"3333: $r ${Y.pre(x.ps(r))}");
+        this.ps.keySet == x.ps.keySet && this.ps.forall((r, Y) => {
             Y.pre(x.ps(r)) })
 
     override def toString: String =

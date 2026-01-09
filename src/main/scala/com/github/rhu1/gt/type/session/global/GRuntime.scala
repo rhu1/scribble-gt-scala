@@ -20,7 +20,7 @@ sealed abstract class GIO extends GAction {
 }
 
 case class GSend(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends GIO {
-    val subj = this.src
+    val subj: Role = this.src
     override def toLAction(subj: Role): LSend =
         if (subj != this.subj) {
             throw new RuntimeException(s"Invalid subject $subj for: $this")
@@ -31,7 +31,7 @@ case class GSend(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends G
 }
 
 case class GRecv(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends GIO {
-    val subj = this.dst
+    val subj: Role = this.dst
     override def toLAction(subj: Role): LRecv =
         if (subj != this.subj) {
             throw new RuntimeException(s"Invalid subject $subj for: $this")
@@ -41,10 +41,10 @@ case class GRecv(pi: Path, src: Role, dst: Role, op: Op, pay: Payload) extends G
     override def toString: String = s"$src?$dst:$op($payToString$pi)"  // pq?a -- p is sender
 }
 
-// !!! c
+// c
 case class GNu(pi: Path, c: Mid) extends GAction {
-    val subj = Role("Dummy")  // ...hack
-    override def toLAction(subj: Role): LNu = LNu(this.pi, subj, this.c)  // !!! ...dummy subj
+    val subj: Role = Role("Dummy")  // ...hack
+    override def toLAction(subj: Role): LNu = LNu(this.pi, subj, this.c)  // ...dummy subj
 }
 
 
@@ -75,7 +75,7 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
         val aYs = this.Y.getActions
         def ok(x: GAction): Boolean = x match {
             case x: GIO => aYs.contains(x.toLAction(x.subj))
-            case x: GNu => aYs.exists(_.isInstanceOf[LNu])  // !!! -- just pick one, <: will do any others
+            case x: GNu => aYs.exists(_.isInstanceOf[LNu])  // -- just pick one, <: will do any others
         }
         if (aGs.forall(x => ok(x))) aGs else Set.empty
 
@@ -85,14 +85,14 @@ case class ComSim(G: GSystem, Y: LSystem) extends SSystem[ComSim, GAction] {
         for {
             aY <- a match {
                 case x: GIO => Right(x.toLAction(x.subj))
-                case x: GNu => aYs.find(_.isInstanceOf[LNu]).toRight("aaaa" + err)  // just pick one, <: will do any others
+                case x: GNu => aYs.find(_.isInstanceOf[LNu]).toRight(err)  // just pick one, <: will do any others
             }
             G1 <- this.G.stepPi(a)
             Y1 <- this.Y.stepPi(aY).map((Y, pi) => (Y.gcAll, pi))
-            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("bbbb" + err)
+            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight(err)
             res <- Either.cond(Y1._1.pre(_YG) && G1._2 == Y1._2,
                 (ComSim(G1._1, _YG), G1._2),
-                "cccc" + err)
+                err)
         } yield res
 
     override def isSafeTermination: Boolean = this.G.isSafeTermination && this.Y.isSafeTermination
@@ -122,10 +122,10 @@ case class FidSim(G: GSystem, Y: LSystem) extends SSystem[FidSim, LAction] {
         for {
             Y1 <- this.Y.stepPi(a).map((Y, pi) => (Y.gcAll, pi))
             G1 <- this.G.stepPi(aG)
-            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight("dddd" + err)
+            _YG <- G1._1.G.projectSystem(this.G.rcom).toRight(err)
             res <- Either.cond(Y1._1.pre(_YG) && G1._2 == Y1._2,
                 (FidSim(G1._1, _YG), G1._2),
-                "eeee" + err)
+                err)
         } yield res
 
     override def isSafeTermination: Boolean = this.G.isSafeTermination && this.Y.isSafeTermination
