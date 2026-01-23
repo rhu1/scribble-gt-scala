@@ -22,6 +22,11 @@ public class GTVState {
     public final int c;  // TOP_SCOPE or c of innermost MC scope
     public final Set<RecVar> recvars;
 
+    // Reset the global counter (used to restart state numbering per role)
+    public static void resetCounter() {
+        count = 1;
+    }
+
     public GTVState(int c) {
         this(c, Set.of());
     }
