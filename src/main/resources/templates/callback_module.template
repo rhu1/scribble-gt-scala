@@ -1,0 +1,69 @@
+%%%-------------------------------------------------------------------
+%%% {{MODULE_NAME}}.erl — generated callback module (implements {{BEHAVIOUR_MODULE}})
+%%%-------------------------------------------------------------------
+-module({{MODULE_NAME}}).
+
+-behaviour({{BEHAVIOUR_MODULE}}).
+
+%% Public API
+-export([start_link/0, callback_mode/0]).
+
+%% gen_<role> callbacks (delegated via behaviour)
+-export([{{CALLBACK_EXPORTS}}]).
+
+%% Types & records
+-include("{{HRL_BASENAME}}.hrl").
+%% Expect #state_data{} to be defined in the HRL. If not, uncomment:
+%% -record(state_data, {{STATE_DATA_FIELDS}}).
+
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
+%% Optional: public types for dialyzer users
+-export_type([state_data/0]).
+-type state_data() :: #state_data{}.
+
+%% ===== API =====
+
+-spec start_link() -> {ok, pid()} | {error, term()}.
+start_link() ->
+    {{BEHAVIOUR_MODULE}}:start_link(?MODULE, []).
+
+-spec callback_mode() -> state_functions.
+callback_mode() ->
+    state_functions.
+
+%% ===== gen_<role> behaviour =====
+
+-spec init(list()) ->
+    {{INIT_RET_SPEC}}.
+init({{INIT_ARGS}}) ->
+    {{STATE_DATA_INIT}},
+    {{INIT_ACTIONS_RETURN}}.
+
+%% ---------- State functions (state_functions mode) ----------
+
+{{#states}}
+{{STATE_COMMENT}}
+{{STATE_SPEC}}
+{{STATE_CLAUSES}}
+{{/states}}
+
+%% ===== misc OTP =====
+
+-spec code_change(term(), atom(), state_data(), term()) -> {ok, state_data()}.
+code_change(_OldVsn, _State, Data, _Extra) ->
+    {ok, Data}.
+
+-spec terminate(term(), atom(), state_data()) -> ok.
+terminate(_Reason, _State, _Data) ->
+    ok.
+
+%% ---------- Helpers ----------
+
+-spec connect(state_data()) -> state_data().
+connect(Data0) ->
+    %% Non-blocking resolver; switch to blocking/retry if you must.
+    Data = {{CONNECTION_BODY}},
+    Data.
