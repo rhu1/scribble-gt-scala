@@ -142,13 +142,25 @@ Notes on the artifact.
    local directory.  In these steps, we will refer to this directory as
    `$MY_LOCAL_DIR`.
 
+   **Note (multi-platform image format).**
+   The file `oopsla2425-paper672-artifact.tar.gz` is a gzipped OCI image archive
+   that contains both `linux/amd64` and `linux/arm64` variants.
+
 2. Check that Docker is running.
 
-3. Load the image and launch a container with an interactive session.  
+3. Load the image and launch a container with an interactive session.
    In `$MY_LOCAL_DIR`, do:
    ```sh
    docker load -i oopsla2425-paper672-artifact.tar.gz
-   docker run -it --rm --entrypoint /bin/bash scribble-gt
+   docker run -it --rm --entrypoint /bin/bash scribble-gt:https
+   ```
+
+   (The image tag printed by `docker load` should match `scribble-gt:https`.
+   If Docker prints a different tag, use that tag instead of `scribble-gt:https`.)
+
+   Optional: confirm the image contains both architectures:
+   ```sh
+   docker buildx imagetools inspect scribble-gt:https
    ```
 
 4. **Test: Protocol validation and code generation.**
@@ -161,7 +173,7 @@ Notes on the artifact.
     The script will loop through all `.scr` protocol files under `examples/scribble/`, validating and projecting each of them. It should complete without errors.
     The generated Erlang code will be written to `generated/<ProtocolName>/`.
 
-    To run all implemented Erlang examples: 
+    To run all implemented Erlang examples:
     ```sh
     ./mMST.sh -run-erlang-examples
     ```
@@ -389,7 +401,7 @@ Other notes.
 
 Please the Table 1 in the paper for references for the examples.
 
-<table border-collapse="collapse">
+<table style="border-collapse: collapse">
 <tr>
 <td width=3% style="border-bottom: 1px solid black"></td>
 <td width=20% style="border-bottom: 1px solid black"><strong>Example</strong></td>
@@ -406,7 +418,7 @@ Please the Table 1 in the paper for references for the examples.
 </tr>
 <tr>
 <td>(2)</td>
-<td>CircuitBreaker</a></td>
+<td>CircuitBreaker</td>
 <td><code>CircuitBreaker.scr</code></td>
 <td><code>circuit_breaker</code></td>
 <td><code>circuit_breaker/src</code></td>
@@ -416,7 +428,7 @@ Please the Table 1 in the paper for references for the examples.
 <td>DistributedLogging</td>
 <td><code>DistributedLogging.scr</code></td>
 <td><code>distributed_logging</code></td>
-<td><code>distributed_logging/src<code></td>
+<td><code>distributed_logging/src</code></td>
 </tr>
 <tr>
 <td>(4)</td>
@@ -430,7 +442,7 @@ Please the Table 1 in the paper for references for the examples.
 <td>SMTP</td>
 <td><code>SMTP.scr</code></td>
 <td><code>smtp</code></td>
-<td><code>SMTP/src<code></td>
+<td><code>SMTP/src</code></td>
 </tr>
 <tr>
 <td>(6)</td>
