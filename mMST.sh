@@ -242,8 +242,8 @@ if [ "$run_scribble_examples" = 1 ]; then
     fi
     exit 0
 elif [ "$run_erlang_examples" = 1 ]; then
-#    ERL_DIR="$SCRIBHOME/examples/erlang"
-    ERL_DIR="$SCRIBHOME/generated_otp_app"
+    ERL_DIR="$SCRIBHOME/examples/erlang"
+#    ERL_DIR="$SCRIBHOME/generated_otp_app"
     echo "Running, starting, and stopping OTP apps in: $ERL_DIR"
     for dir in "$ERL_DIR"/*/; do
         [ -d "$dir" ] || continue
