@@ -19,12 +19,11 @@ import scala.jdk.CollectionConverters.*
   *      * on Tau: commit(RIGHT), on Recv: commit(LEFT).
   *  - Send helpers attach Pi using current_path_plus([{McId, Side}]) at MC entries,
   *    and current_path() elsewhere under mixed-choice regions.
-  *  - Unknown external events are postponed (not dropped) to preserve selective receive,
-  *    but only for recvs not handled directly in the current state.
+  *  - External events are postponed (not dropped) to preserve selective receive,
+  *   for recvs not handled directly in the current state.
   */
 object RuntimeModuleGenerator {
 
-  // Mirror Java GTGenUtil.StateKind for Scala-side pattern matching
   private sealed trait StateKind
   private object StateKind {
     case object Branch extends StateKind
@@ -55,7 +54,7 @@ object RuntimeModuleGenerator {
   }
 
   // Collect all receive events that are reachable from a given state.
-  // IMPORTANT: we do NOT filter out direct receives here, because in mixed-choice regions
+  // do not filter out direct receives here, because in mixed-choice regions
   // the same op can arrive "late" at a different state, and we still need a safety clause.
   private def reachableRecvEvents(efsm: GTEFSM, from: GTVState): List[GTVRecv] = {
     val visited = scala.collection.mutable.HashSet.empty[GTVState]
@@ -94,6 +93,37 @@ object RuntimeModuleGenerator {
     }
   }
 
+  // Canonical message encoding:
+  //  - arity 0: {op}
+  //  - arity 1: {op, {Arg}}
+  //  - arity n: {op, {A1, ..., An}}
+  private def payloadTerm(opStr: String, args: List[String]): String = {
+    val op = erlAtom(opStr)
+    args match {
+      case Nil => s"{$op}"
+      case one :: Nil => s"{$op, {$one}}"
+      case many => s"{$op, {" + many.mkString(", ") + "}}"
+    }
+  }
+
+  private def payloadType(opStr: String, arity: Int): String = {
+    val op = erlAtom(opStr)
+    arity match {
+      case 0 => s"{$op}"
+      case 1 => s"{$op, {term()}}"
+      case n => s"{$op, {" + List.fill(n)("term()").mkString(", ") + "}}"
+    }
+  }
+
+  private def payloadPatNamed(opStr: String, varNames: List[String]): String = {
+    val op = erlAtom(opStr)
+    varNames match {
+      case Nil => s"{$op}"
+      case one :: Nil => s"{$op, {$one}}"
+      case many => s"{$op, {" + many.mkString(", ") + "}}"
+    }
+  }
+
   def generate(protocolName: String, roleAtom: String, efsm: GTEFSM, outDir: File, emitGC: Boolean = false): File = {
     val genModule = s"gen_${roleAtom}"
     val stateListAll = efsm.S.asScala.toList.sortBy(_.id)
@@ -114,11 +144,11 @@ object RuntimeModuleGenerator {
     val statesAll = stateListAll.map(localName)
     val initState = localName.getOrElse(efsm.init, statesAll.headOption.getOrElse("s0"))
 
-    // Helper: end/sink state has no outgoing behaviour according to Java StateKind
+    // Helper: end/sink state has no outgoing behaviour
     def isEndState(s: GTVState): Boolean =
       StateKind.fromJava(efsm, s) == StateKind.End
 
-    // Only generate non-end states (mirror Java generator semantics)
+    // Only generate non-end states
     val stateList = stateListAll.filterNot(isEndState)
 
     // Identify entry mixed-choice states
@@ -126,8 +156,7 @@ object RuntimeModuleGenerator {
     val mcStates: List[GTVState] = stateList.filter(isEntryMC)
     val mcIds: Map[GTVState, String] = mcStates.zipWithIndex.map{ case (s, i) => s -> s"mc${i+1}" }.toMap
 
-    // Recursion variables are represented by GTVRecVar states; EFSM.fix() rewrites their targets.
-    // We do the same locally so mcDescendants includes states reachable through recursion cycles.
+    // Recursion variables are represented by GTVRecVar states
     val recVarEntries: Map[RecVar, GTVState] = {
       val m = scala.collection.mutable.LinkedHashMap.empty[RecVar, GTVState]
       stateListAll.foreach { st =>
@@ -235,24 +264,24 @@ object RuntimeModuleGenerator {
         val arity = varNames.size
         val exportArity = 2 + arity
         val paramsList = (List(roleVar) ++ varNames :+ "_Data").mkString(", ")
-        val payloadTerm = if (arity == 0) s"{${erlAtom(opStr)}}" else s"{${erlAtom(opStr)}, {" + varNames.mkString(", ") + "}}"
-        val castTerm = if (underMC)
-          s"{self(), ${payloadTerm}, Path}"
-        else
-          s"{self(), ${payloadTerm}}"
 
-        val pathLine = if (underMC) {
-          if (isEntry) {
-            val pair = (opStr, roleName)
-            if (tauSendPairs.contains(pair)) s"    Path = current_path_plus([{${mcIdAtom}, right}]),\n"
-            else if (recvSendPairs.contains(pair)) s"    Path = current_path_plus([{${mcIdAtom}, left}]),\n"
-            else s"    Path = current_path(),\n"
-          } else "    Path = current_path(),\n"
-        } else ""
+        val payload = payloadTerm(opStr, varNames)
+        val castTerm = if (underMC)
+          s"{self(), ${payload}, Path}"
+        else
+          s"{self(), ${payload}}"
+
+        val pathLine =
+          if (underMC)
+            "    Path = current_path(),\n"
+          else
+            ""
+
         val specLine =
           s"-spec send_${name}_${opStr}(${roleVar} :: pid()" +
             (if (arity > 0) ", " + varNames.map(_ => "term()").mkString(", ") else "") +
             ", _Data :: state_data()) -> ok."
+
         val body =
           s"""
              |${specLine}
@@ -296,8 +325,6 @@ object RuntimeModuleGenerator {
       val recvSigs = edges.keySet().asScala.map(_.right).collect{case r: GTVRecv => RecvSig(r.role.toString, r.op.toString, r.pay.elems.size())}.toSet.toList.sortBy(rs => (rs.role, rs.op, rs.arity))
 
       val eventTypeUnion = if (tauOps.nonEmpty && recvSigs.nonEmpty) "internal | cast" else if (tauOps.nonEmpty) "internal" else if (recvSigs.nonEmpty) "cast" else "gen_statem:event_type()"
-
-      def payloadType(op: String, arity: Int): String = if (arity == 0) s"{${erlAtom(op)}}" else if (arity == 1) s"{${erlAtom(op)}, term()}" else s"{${erlAtom(op)}, {" + List.fill(arity)("term()" ).mkString(", ") + "}}"
 
       val internalArgTypes = tauOps.map(op => s"{${erlAtom(op)}}")
       val castArgTypes =
@@ -358,8 +385,8 @@ object RuntimeModuleGenerator {
       val underMC = mcDescendants.contains(s)
       val kind: StateKind = StateKind.fromJava(efsm, s)
 
-      // If GC/path logic is disabled, treat all states as not-under-MC for the runtime encoding.
-      // This makes casts be {From, Msg} and removes stale/path purging.
+      // If GC/path logic is disabled, treat all states as not-under-MC
+      // This makes casts be {From, Msg} and removes stale/path purging
       val underMC0 = emitGC && underMC
       val isMCEntry0 = emitGC && isMCEntry
 
@@ -369,7 +396,6 @@ object RuntimeModuleGenerator {
       case class Key(kind: String, op: String, role: String, arity: Int)
       val seen = scala.collection.mutable.LinkedHashSet[Key]()
 
-      // REMOVE the allRecvEvents reference here (moved to closure in generate)
       val specificClauses: List[String] = events.flatMap {
         case e: GTVRecv =>
           val roleName = e.role.toString
@@ -387,10 +413,7 @@ object RuntimeModuleGenerator {
               counts.update(n, idx + 1)
               if (idx == 0) n else s"${n}${idx + 1}"
             }
-            val payPatNamed =
-              if (arity == 0) s"{${erlAtom(op)}}"
-              else if (arity == 1) s"{${erlAtom(op)}, ${varNames.head}}"
-              else s"{${erlAtom(op)}, {" + varNames.mkString(", ") + "}}"
+            val payPatNamed = payloadPatNamed(op, varNames)
 
             val doublePat = s"{${roleVar}, ${payPatNamed}}"
             val triplePat = s"{${roleVar}, ${payPatNamed}, Path}"
@@ -410,7 +433,6 @@ object RuntimeModuleGenerator {
               |                 io:format("${genModule}[${sname}]: Callback had no clause for ~p, postponing~n", [${payPatNamed}]),
               |                 {keep_state, Data, [postpone]}
               |               end,
-              |        %% Commit after callback based on returned target state (prefer right over left on ties)
               |        case Next of
               |${{
                     val rightList = lr.right.toList.sorted
@@ -441,19 +463,13 @@ object RuntimeModuleGenerator {
           if (seen.contains(k)) None
           else {
             seen += k
-            val rightList = lr.right.toList.sorted
-            val commitCase: String = if (isMCEntry0) {
-              val lines =
-                rightList.map(ns => s"          {next_state, ${ns}, _} -> commit_entry(${mcIds(s)}, right), Next;") ++
-                rightList.map(ns => s"          {next_state, ${ns}, _, _} -> commit_entry(${mcIds(s)}, right), Next;") :+
-                "          _ -> Next"
-              s"        case Next of\n${lines.mkString("\n")}\n        end"
-            } else "        Next"
+            // Sending on the LHS is non-committing
+            val commitCase: String = "        Next"
             Some((s"""
               |${sname}(internal, {${erlAtom(op)}}, Data) ->
               |    CallbackModule = get(callback_module),
               |    Next = CallbackModule:${sname}(internal, {${erlAtom(op)}}, Data),
-              |${commitCase}""".stripMargin).trim)
+              |        Next""".stripMargin).trim)
           }
         case _ => None
       }.toList
@@ -462,8 +478,7 @@ object RuntimeModuleGenerator {
       val tauOpsForSpec = edges.keySet().asScala.map(_.right).collect{ case t: GTVTau => t.op.toString }.toSet.toList.sorted
       case class RecvSig(role: String, op: String, arity: Int)
       val recvSigsForSpec = edges.keySet().asScala.map(_.right).collect{ case r: GTVRecv => RecvSig(r.role.toString, r.op.toString, r.pay.elems.size()) }.toSet.toList
-      def payloadType(op: String, arity: Int): String =
-        if (arity == 0) s"{${erlAtom(op)}}" else if (arity == 1) s"{${erlAtom(op)}, term()}" else s"{${erlAtom(op)}, {" + List.fill(arity)("term()" ).mkString(", ") + "}}"
+
       val internalArgTypes = tauOpsForSpec.map(op => s"{${erlAtom(op)}}")
       val castArgTypesForSpec = recvSigsForSpec.map { rs =>
         if (underMC0) s"{pid(), ${payloadType(rs.op, rs.arity)}, list()}" else s"{pid(), ${payloadType(rs.op, rs.arity)}}"
@@ -481,7 +496,13 @@ object RuntimeModuleGenerator {
 
       // -------- Postpone / purge clauses (selective receive) --------
       // Only needed under mixed-choice regions when emitGC=true, because those are the states
-      // where Path-tagged messages can arrive "late" and would otherwise crash due to no clause.
+      // where Path-tagged messages can arrive "late" and would otherwise crash
+
+      val specificallyHandledInThisState: Set[(String, String, Int)] =
+        edges.keySet().asScala
+          .map(_.right)
+          .collect { case r: GTVRecv => (r.role.toString, r.op.toString, r.pay.elems.size()) }
+          .toSet
 
       val postponeClauses: List[String] =
         if (!underMC0) {
@@ -489,13 +510,14 @@ object RuntimeModuleGenerator {
         } else {
           case class RecvKey(role: String, op: String, arity: Int, vars: List[String])
 
-          // Use all receive signatures so we never miss a late message.
+          // Use all receive signatures so we never miss a late message,
+          // Skip those already specifically handled in this state.
           val keys: List[RecvKey] = {
             val seen = scala.collection.mutable.LinkedHashSet[(String, String, Int)]()
             val b = List.newBuilder[RecvKey]
             allRecvEvents.foreach { e =>
               val key = (e.role.toString, e.op.toString, e.pay.elems.size())
-              if (!seen.contains(key)) {
+              if (!specificallyHandledInThisState.contains(key) && !seen.contains(key)) {
                 seen += key
                 val raw = e.pay.elems.asScala.toList.map(x => capitalizeFirst(x.toString))
                 val counts = scala.collection.mutable.LinkedHashMap.empty[String, Int]
@@ -511,9 +533,11 @@ object RuntimeModuleGenerator {
           }
 
           def payloadPatVars(op: String, arity: Int, vars: List[String]): String =
-            if (arity == 0) s"{${erlAtom(op)}}"
-            else if (arity == 1) s"{${erlAtom(op)}, ${vars.headOption.getOrElse("V1")}}"
-            else s"{${erlAtom(op)}, {" + vars.mkString(", ") + "}}"
+            arity match {
+              case 0 => s"{${erlAtom(op)}}"
+              case 1 => s"{${erlAtom(op)}, {${vars.headOption.getOrElse("V1")}}}"
+              case _ => s"{${erlAtom(op)}, {" + vars.mkString(", ") + "}}"
+            }
 
           keys.map { rk =>
             val roleVar = "_" + capitalizeFirst(rk.role) + "Pid"
@@ -531,9 +555,9 @@ object RuntimeModuleGenerator {
           }
         }
 
-      // Extra safety: when GC is enabled, a Path-tagged message may arrive before the receiver
+      // when GC is enabled, a Path tagged message may arrive before the receiver
       // enters the mixed-choice region (e.g., sender tags at MC entry but receiver is still in a
-      // pre-MC state). Add a catch-all triple handler to avoid function_clause crashes.
+      // pre-MC state)
       val preMcTripleSafety: List[String] =
         if (emitGC && !underMC0) {
           List(
@@ -541,10 +565,10 @@ object RuntimeModuleGenerator {
                |${sname}(cast, {_From, _Msg, Path}, Data) ->
                |    case stale(Path) of
                |      true ->
-               |        io:format(\"${genModule}[${sname}]: Purging stale early-path event ~p~n\", [_Msg]),
+               |        io:format("${genModule}[${sname}]: Purging stale early-path event ~p~n", [_Msg]),
                |        {keep_state, Data};
                |      false ->
-               |        io:format(\"${genModule}[${sname}]: Postponing early-path event ~p~n\", [_Msg]),
+               |        io:format("${genModule}[${sname}]: Postponing early-path event ~p~n", [_Msg]),
                |        {keep_state, Data, [postpone]}
                |    end""".stripMargin.trim
           )
@@ -557,60 +581,55 @@ object RuntimeModuleGenerator {
 
     val stateFunctions = stateList.map(buildStateFunction).mkString("\n")
 
+    val emitGcHelpers: Boolean = emitGC && mcStates.nonEmpty
+
     val gcHelpers: String =
-      if (emitGC)
+      if (emitGcHelpers) {
+        // Only emit current_path if we generate at least one send helper that builds a Path.
+        val usesCurrentPath: Boolean = emitGC && sendSpecs.exists(_.code.contains("Path = current_path()"))
+
+        val currentPathDecl =
+          if (usesCurrentPath)
+            """
+              |%% current_path/0 is used only to annotate outgoing messages with the sender's
+              |%% current MC context, when this role is inside an active mixed-choice region.
+              |-spec current_path() -> [{atom(), left | right}].
+              |current_path() ->
+              |    Commit = get_commit(),
+              |    lists:sort(maps:to_list(Commit)).
+              |""".stripMargin
+          else ""
+
         s"""
            |
-           |%% ---------- GC / commitment helpers (stacked commits) ----------
+           |%% ---------- GC / commitment helpers (per-mixed-choice side) ----------
+           |%% We track, per MC id, which side this role is committed to: left | right.
+           |%% Uncommitted MCs have no entry.
            |get_commit() -> case get(commit_map) of undefined -> #{}; M -> M end.
            |set_commit(M) -> put(commit_map, M), M.
            |
            |-spec commit_entry(atom(), left | right) -> map().
            |commit_entry(McId, Side) when Side =:= left; Side =:= right ->
-           |    Stack0 = maps:get(McId, get_commit(), []),
-           |    Stack1 = [Side | Stack0],
-           |    set_commit(maps:put(McId, Stack1, get_commit())).
+           |    set_commit(maps:put(McId, Side, get_commit())).
+           |
+           |%% Staleness follows Section 4.1: a message is stale if, for some MC on its Path,
+           |%% following the Path hits a stale side (i.e., we are committed to the opposite side).
+           |%% We approximate local type commitment using the commit_map.
            |
            |-spec stale([{atom(), left | right}]) -> boolean().
            |stale(Path) when is_list(Path) ->
            |    Commit = get_commit(),
-           |    McGroups = lists:foldl(
-           |      fun({Mc,Side}, Acc) ->
-           |        case maps:find(Mc, Acc) of
-           |          {ok, L} -> maps:put(Mc, [Side|L], Acc);
-           |          error   -> maps:put(Mc, [Side], Acc)
+           |    lists:any(
+           |      fun({Mc, MsgSide}) ->
+           |        case maps:find(Mc, Commit) of
+           |          error -> false; %% not committed => nothing is stale for this MC
+           |          {ok, LocalSide} -> LocalSide =/= MsgSide
            |        end
-           |      end, #{}, Path),
-           |    maps:fold(
-           |      fun(Mc, InSidesRev, Acc) ->
-           |        InCount   = length(InSidesRev),
-           |        Local     = maps:get(Mc, Commit, []),
-           |        LocCount  = length(Local),
-           |        Acc orelse
-           |          (InCount < LocCount) orelse
-           |          ((InCount =:= LocCount) andalso
-           |            case Local of
-           |              [CurSide | _] ->
-           |                InLast = hd(InSidesRev),
-           |                InLast =/= CurSide;
-           |              [] -> false
-           |            end)
-           |      end, false, McGroups).
+           |      end, Path).
            |
-           |-spec current_path() -> [{atom(), left | right}].
-           |current_path() ->
-           |    Commit = get_commit(),
-           |    maps:fold(
-           |      fun(Mc, Sides, Acc) ->
-           |        OldestFirst = lists:reverse(Sides),
-           |        Acc ++ [{Mc, Side} || Side <- OldestFirst]
-           |      end, [], Commit).
-           |
-           |-spec current_path_plus([{atom(), left | right}]) -> [{atom(), left | right}].
-           |current_path_plus(Extra) ->
-           |    current_path() ++ Extra.
+           |${currentPathDecl.stripTrailing()}
            |""".stripMargin
-      else ""
+      } else ""
 
     val content = s"""
       |%%%-------------------------------------------------------------------
@@ -681,3 +700,4 @@ object RuntimeModuleGenerator {
     outFile
   }
 }
+
