@@ -1,1 +1,7 @@
--record(state_data, {mc_counter_1 = 0 :: integer(), a_pid :: pid() | undefined, b_pid :: pid() | undefined}).
+
+-ifndef(C_HRL).
+-define(C_HRL, true).
+
+-record(state_data, {mc_path = [] :: [atom()], a_pid :: pid() | undefined, b_pid :: pid() | undefined}).
+
+-endif.

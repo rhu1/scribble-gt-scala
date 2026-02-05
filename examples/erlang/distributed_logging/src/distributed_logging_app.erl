@@ -1,5 +1,10 @@
 %%%-------------------------------------------------------------------
-%% @doc calculator public API
+%% @doc `distributed_logging` OTP application entrypoint.
+%%
+%% Standard OTP application wiring: starting the supervision tree
+%% (`distributed_logging_sup`) starts all protocol roles for the demo.
+%%
+%% See `README.md` in this directory for expected behaviour and usage.
 %% @end
 %%%-------------------------------------------------------------------
 
@@ -14,4 +19,3 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
     ok.
-

@@ -1,10 +1,17 @@
+%%-------------------------------------------------------------------
+%% @doc OnlineWallet demo role: `s` (server).
+%%
+%% Role implementation module: implements generated behaviour `gen_s`.
+%%-------------------------------------------------------------------
+
 -module(s).
 -behaviour(gen_s).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, s4/3, make_choice_timeout/1, s8/3, make_choice_pay/1, make_choice_quit/1, s9/3, s12/3, s6/3]).
 
 -include("s.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), a_pid :: pid() | undefined, c_pid :: pid() | undefined}.
+%% state_data record is defined in s.hrl (mc_path + peer pids).
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,13 +23,13 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("s initialized ~n", []),
     {ok, s1, Data}.
 
 -spec make_choice_timeout(state_data()) -> integer().
 make_choice_timeout(_Data) ->
-    rand:uniform(2).
+    1.
 
 -spec s4(internal, {atom()}, state_data()) -> {next_state, s8, state_data(), [{next_event, internal, {timeout}}]}.
 s4(internal, {account}, #state_data{c_pid = CPid} = Data) ->
@@ -46,10 +53,10 @@ s12(internal, {quit_ack}, #state_data{c_pid = CPid} = Data) ->
 
 -spec make_choice_pay(state_data()) -> integer().
 make_choice_pay(_Data) ->
-    rand:uniform(2).
+    1.
 
--spec s8(internal | EventType :: term(), {atom()} | {pid(), {atom(), term(), term()}}, state_data()) -> 
-    {next_state, s6, state_data(), [{next_event, internal, {timeout}}]} | 
+-spec s8(internal | EventType :: term(), {atom()} | {pid(), {atom(), term(), term()} | {atom(), {term(), term()}}}, state_data()) ->
+    {next_state, s6, state_data(), [{next_event, internal, {timeout}}]} |
     {next_state, s9, state_data(), [{next_event, internal, {confirmation}}]} | 
     {next_state, s12, state_data(), [{next_event, internal, {quit_ack}}]} |
     {keep_state, state_data()}.
@@ -63,6 +70,8 @@ s8(internal, {timeout}, #state_data{c_pid = CPid} = Data) ->
             gen_s:send_s8_timeout(CPid, Data),
             {next_state, s6, Data, [{next_event, internal, {timeout}}]}
     end;
+s8(cast, {CPid, {pay, {Payee, Amount}}}, Data) ->
+    s8(cast, {CPid, {pay, Payee, Amount}}, Data);
 s8(cast, {CPid, {pay, Payee, Amount}}, #state_data{c_pid = CPid} = Data) ->
     io:format("S: s8 Received pay request from C ~p ~p ~n", [Payee, Amount]),
     case make_choice_pay(Data) of
@@ -92,7 +101,7 @@ s9(internal, {confirmation}, #state_data{c_pid = CPid} = Data) ->
 
 -spec make_choice_quit(state_data()) -> integer().
 make_choice_quit(_Data) ->
-    rand:uniform(2).
+    1.
 
 -spec s1(cast, {pid() | undefined, {atom()} | {atom(), term()} }, state_data()) -> {
     next_state, s4, state_data(), [{next_event, internal, {account}}]} |
@@ -125,4 +134,3 @@ connection(Data) ->
             Pid_c
     end,
     Data#state_data{a_pid = APid, c_pid = CPid}.
-

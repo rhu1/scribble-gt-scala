@@ -1,5 +1,9 @@
 %%%-------------------------------------------------------------------
-%% @doc calculator public API
+%% @doc `circuit_breaker` OTP application entrypoint.
+%%
+%% This module is standard OTP application wiring: starting the supervision
+%% tree (`circuit_breaker_sup`) starts all protocol roles for the demo.
+%%
 %% @end
 %%%-------------------------------------------------------------------
 
@@ -14,4 +18,3 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
     ok.
-

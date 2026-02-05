@@ -1,3 +1,13 @@
+%%-------------------------------------------------------------------
+%% @doc TwoBuyer demo role: `bob`.
+%%
+%% Role implementation module: implements generated behaviour `gen_bob`.
+%% The generator supplies the protocol-checked `gen_statem` wrapper and message
+%% API; this module provides the Bob-side demo logic.
+%%
+%% Protocol source: `examples/scribble/TwoBuyer.scr`.
+%%-------------------------------------------------------------------
+
 -module(bob).
 -behaviour(gen_bob).
 
@@ -15,7 +25,8 @@
 	]).
 
 -include("bob.hrl").
--type state_data() :: #state_data{mc_counter_2 :: integer(), mc_counter_1 :: integer(), seller_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
+%% state_data record is defined in bob.hrl (mc_path + peer pids).
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -27,7 +38,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s4, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("bob initialized ~n", []),
     {ok, s4, Data}.
 
@@ -130,4 +141,3 @@ connection(Data) ->
             Pid_alice
     end,
     Data#state_data{seller_pid = SellerPid, alice_pid = AlicePid}.
-

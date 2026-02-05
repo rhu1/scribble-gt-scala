@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Timeout demo role: `b`.
+%%
+%% Role implementation module: implements generated behaviour `gen_b`.
+%% Protocol source: `examples/scribble/Timeout.scr`.
+%%-------------------------------------------------------------------
+
 -module(b).
 -behaviour(gen_b).
 
@@ -13,7 +20,8 @@
 	]).
 
 -include("b.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), a_pid :: pid() | undefined, c_pid :: pid() | undefined}.
+%% state_data record is defined in b.hrl (mc_path + peer pids).
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -25,7 +33,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s5, state_data(), [{next_event, internal, {'TOa'}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("b initialized ~n", []),
     {ok, s5, Data, [{next_event, internal, {'TOa'}}]}.
 
@@ -44,14 +52,15 @@ s5(internal, {'TOa'}, Data) ->
     APid = NewData#state_data.a_pid,
     case make_choice_TOa(NewData) of
         1 ->
-            {keep_state, NewData};
+          io:format("B: s5 waiting for a1 ~n", []),
+          {keep_state, NewData};
         2 ->
             gen_b:send_s5_TOa(APid, NewData),
             io:format("B: s5 Sending TOa to A ~n", []),
             {next_state, s3, NewData, [{next_event, internal, {'TOc'}}]}
     end;
 s5(cast, {APid, {a1}}, #state_data{a_pid = APid} = Data) ->
-    io:format("C: s5 Received a1  from A ~p ~n", [APid]),
+    io:format("B: s5 Received a1  from A ~p ~n", [APid]),
     case make_choice_a1(Data) of
         1 ->
             {next_state, s6, Data, [{next_event, internal, {a3}}]};
@@ -101,4 +110,3 @@ connection(Data) ->
             Pid_c
     end,
     Data#state_data{a_pid = APid, c_pid = CPid}.
-

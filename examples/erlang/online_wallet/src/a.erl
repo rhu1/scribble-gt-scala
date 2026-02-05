@@ -1,10 +1,16 @@
+%%-------------------------------------------------------------------
+%% @doc OnlineWallet demo role: `a`.
+%%
+%% Role implementation module: implements generated behaviour `gen_a`.
+%%-------------------------------------------------------------------
+
 -module(a).
 -behaviour(gen_a).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, make_choice_s3/1, s3/3, s4/3, s8/3, s12/3]).
 
 -include("a.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), c_pid :: pid() | undefined, s_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +22,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("a initialized ~n", []),
     {ok, s1, Data}.
 
@@ -59,11 +65,13 @@ s8(cast, {SPid, {timeout}}, #state_data{s_pid = SPid} = Data) ->
 
 -spec make_choice_s3(state_data()) -> integer().
 make_choice_s3(_Data) ->
-    rand:uniform(2).
+    1.
 
--spec s1(cast, {pid(), {atom(), term(), term()}}, state_data()) -> 
+-spec s1(cast, {pid(), {atom(), term(), term()} | {atom(), {term(), term()}}}, state_data()) ->
     {next_state, s3, state_data(), [{next_event, internal, {login_success}}]} |
     {next_state, s3, state_data(), [{next_event, internal, {login_failed}}]}.
+s1(cast, {_CPid, {login, {Id, Password}}}, Data) ->
+    s1(cast, {_CPid, {login, Id, Password}}, Data);
 s1(cast, {_CPid, {login, Id, Password}}, Data) ->
     io:format("A: s1 Received login request from C ~p ~p ~n", [Id, Password]),
     Data1 = connection(Data),
@@ -104,4 +112,3 @@ connection(Data) ->
             Data#state_data{c_pid = CPid, s_pid = SPid}
 
     end.
-    

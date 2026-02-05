@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (condition) role: `alice2`.
+%%
+%% Second-session role. In the condition variant, some messages may be buffered
+%% until the enabling condition is satisfied.
+%%-------------------------------------------------------------------
+
 -module(alice2).
 -behaviour(gen_alice2).
 
@@ -48,4 +55,3 @@ s7(internal, {response}, #state_data{bob_pid = BobPid} = Data) ->
   io:format("Alice: s7 Sending response to Bob ~n", []),
   gen_alice2:send_s7_response(BobPid, Data),
   {stop, normal, Data}.
-

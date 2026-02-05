@@ -1,3 +1,9 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (ETS condition) role: `bob`.
+%%
+%% Role implementation module: implements generated behaviour `gen_bob`.
+%%-------------------------------------------------------------------
+
 -module(bob).
 -behaviour(gen_bob).
 

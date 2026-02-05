@@ -1,3 +1,9 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (ETS condition) role: `alice2`.
+%%
+%% Second-session role coordinated via ETS turn logic.
+%%-------------------------------------------------------------------
+
 -module(alice2).
 -behaviour(gen_alice2).
 

@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Timeout demo role: `client`.
+%%
+%% Role implementation module: implements generated behaviour `gen_c`.
+%% Protocol source: `examples/scribble/Timeout.scr`.
+%%-------------------------------------------------------------------
+
 -module(client).
 -behaviour(gen_c).
 
@@ -10,7 +17,7 @@
 	]).
 
 -include("c.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), a_pid :: pid() | undefined, b_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -22,7 +29,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s4, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("c initialized ~n", []),
     {ok, s4, Data}.
 
@@ -74,4 +81,3 @@ connection(Data) ->
             Pid_b
     end,
     Data#state_data{a_pid = APid, b_pid = BPid}.
-

@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc SMTP demo role: `client`.
+%%
+%% Role implementation module: implements generated behaviour `gen_c`.
+%% Protocol source: `examples/scribble/SMTP.scr`.
+%%-------------------------------------------------------------------
+
 -module(client).
 -behaviour(gen_c).
 
@@ -36,7 +43,7 @@
 	]).
 
 -include("c.hrl").
--type state_data() :: #state_data{mc_counter_2 :: integer(), mc_counter_1 :: integer(), s_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -48,7 +55,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0, mc_counter_2 = 0},
+    Data = #state_data{},
     io:format("c initialized ~n", []),
     {ok, s1, Data}.
 

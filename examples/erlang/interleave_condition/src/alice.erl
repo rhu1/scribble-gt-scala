@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (condition) role: `alice`.
+%%
+%% Role implementation module: implements generated behaviour `gen_alice`.
+%% This variant demonstrates conditional activation of a second session.
+%%-------------------------------------------------------------------
+
 -module(alice).
 -behaviour(gen_alice).
 

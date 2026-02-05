@@ -1,3 +1,12 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo helper: ETS-backed turn/enable flag.
+%%
+%% This module provides a tiny shared state used by the interleave_condition_ets
+%% example to coordinate which session/role is allowed to proceed.
+%%
+%% It is intentionally simple and local to this example.
+%%-------------------------------------------------------------------
+
 -module(turn).
 
 -export([get/0, set/1, reset/0]).

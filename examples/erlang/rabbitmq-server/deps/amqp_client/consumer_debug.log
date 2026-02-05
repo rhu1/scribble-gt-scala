@@ -1,0 +1,6 @@
+*DBG* amqp_selective_consumer enter gen_consumer in state s1
+*DBG* amqp_selective_consumer receive internal {register_default_consumer} in state s1
+*DBG* amqp_selective_consumer consume internal init_state in state s1
+*DBG* amqp_selective_consumer receive internal {basic_consume} in state s3
+*DBG* amqp_selective_consumer consume internal {register_default_consumer} in state s1 => s3
+*DBG* amqp_selective_consumer consume internal {basic_consume} in state s3 => s4

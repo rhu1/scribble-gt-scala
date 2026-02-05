@@ -12,7 +12,7 @@
 	]).
 
 -include("fd.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), w_pid :: pid() | undefined, m_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -24,7 +24,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s6, state_data(), [{next_event, internal, {'Timeout'}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("fd initialized ~n", []),
     {ok, s6, Data, [{next_event, internal, {'Timeout'}}]}.
 
@@ -93,4 +93,3 @@ connection(Data) ->
             Pid_m
     end,
     Data#state_data{w_pid = WPid, m_pid = MPid}.
-

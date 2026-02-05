@@ -1,1 +1,7 @@
--record(state_data, {mc_counter_1 = 0 :: integer(), agency_pid :: pid() | undefined, client_pid :: pid() | undefined}).
+
+-ifndef(SUPPLIER_HRL).
+-define(SUPPLIER_HRL, true).
+
+-record(state_data, {mc_path = [] :: [atom()], client_pid :: pid() | undefined, agency_pid :: pid() | undefined}).
+
+-endif.

@@ -1,10 +1,35 @@
+%%-------------------------------------------------------------------
+%% @doc Calculator demo role: `srv` (server).
+%%
+%% This module is a *hand-written* callback implementation that runs under the
+%% generated protocol wrapper `gen_srv` (a `gen_statem`). The wrapper enforces
+%% the Scribble protocol at runtime and calls into these state callbacks.
+%%
+%% In this demo, `srv` receives two integers from `carol` and then either:
+%%  - sends a `timeout` (simulating a timeout branch), or
+%%  - produces a `sum`/`diff` result and forwards it via the protocol.
+%%
+%% The helper `connect/1` resolves peer role PIDs by registered name.
+%% Choices are randomized via `rand:uniform/1` to exercise branches.
+%%
+%% Files in this app:
+%%  - `gen_srv.erl` (generated): protocol-enforcing wrapper; do not edit.
+%%  - `srv.erl` (this file): minimal demo logic; safe to edit.
+%%-------------------------------------------------------------------
+
 -module(srv).
 -behaviour(gen_srv).
 
--export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, make_choice_timeout/1, s6/3, make_choice_sum/1, make_choice_diff/1, s7/3, s9/3]).
+%% State callbacks are invoked by the generated wrapper.
+-export([init/1, callback_mode/0, start_link/0,
+         s1/3, s3/3,
+         make_choice_timeout/1, s6/3,
+         make_choice_sum/1, make_choice_diff/1,
+         s7/3, s9/3]).
 
 -include("srv.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), carol_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
+%% state_data record is defined in srv.hrl (commit/GC metadata + peer pids).
+-type state_data() :: #state_data{mc_path :: [atom()], carol_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +41,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("srv initialized ~n", []),
     {ok, s1, Data}.
 
@@ -111,5 +136,3 @@ s9(internal, {result_diff}, #state_data{carol_pid = CarolPid} = Data) ->
     Result = 42, % Example result, can be replaced with actual logic
     gen_srv:send_s9_result_diff(CarolPid, Result, Data),
     {stop, normal, Data}.
-
-

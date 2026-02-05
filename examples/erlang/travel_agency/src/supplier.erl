@@ -1,10 +1,17 @@
+%%-------------------------------------------------------------------
+%% @doc TravelAgency demo role: `supplier`.
+%%
+%% Role implementation module: implements generated behaviour `gen_supplier`.
+%% Protocol source: `examples/scribble/TravelAgency.scr`.
+%%-------------------------------------------------------------------
+
 -module(supplier).
 -behaviour(gen_supplier).
 
 -export([init/1, callback_mode/0, start_link/0, s5/3, s6/3]).
 
 -include("supplier.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), agency_pid :: pid() | undefined, client_pid :: pid() | undefined}.
+-type state_data() :: #state_data{agency_pid :: pid() | undefined, client_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +23,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s5, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("supplier initialized ~n", []),
     {ok, s5, Data}.
 
@@ -69,4 +76,3 @@ connection(Data) ->
             Pid_client
     end,
     Data#state_data{agency_pid = AgencyPid, client_pid = ClientPid}.
-

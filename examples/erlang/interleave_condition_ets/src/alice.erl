@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (ETS condition) role: `alice`.
+%%
+%% Similar to interleave_condition, but uses an ETS-backed turn/enable flag
+%% (see `turn.erl`) to coordinate session interleaving.
+%%-------------------------------------------------------------------
+
 -module(alice).
 -behaviour(gen_alice).
 

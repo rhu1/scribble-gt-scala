@@ -1,1 +1,7 @@
--record(state_data, {mc_counter_1 = 0 :: integer(), controller_pid :: pid() | undefined}).
+
+-ifndef(LOGS_HRL).
+-define(LOGS_HRL, true).
+
+-record(state_data, {mc_path = [] :: [atom()], controller_pid :: pid() | undefined}).
+
+-endif.

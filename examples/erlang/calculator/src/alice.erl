@@ -4,7 +4,7 @@
 -export([init/1, callback_mode/0, start_link/0, s4/3]).
 
 -include("alice.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), carol_pid :: pid() | undefined, srv_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], carol_pid :: pid() | undefined, srv_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +16,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s4, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("alice initialized ~n", []),
     {ok, s4, Data}.
 
@@ -56,4 +56,3 @@ s4(cast, {_CarolPid, {cancel}}, Data) ->
     Data1 = connect(Data),
     io:format("Alice: s4 Received cancel from Carol ~n", []),
     {stop, normal, Data1}.
-

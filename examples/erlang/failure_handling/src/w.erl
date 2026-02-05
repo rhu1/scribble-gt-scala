@@ -11,7 +11,7 @@
 	]).
 
 -include("w.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), m_pid :: pid() | undefined, fd_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -23,7 +23,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("w initialized ~n", []),
     {ok, s1, Data}.
 

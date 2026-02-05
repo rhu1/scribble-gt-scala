@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (chaining) role: `alice2`.
+%%
+%% Second-session role started after the first Alice session completes.
+%% Executed under generated wrapper `gen_alice2`.
+%%-------------------------------------------------------------------
+
 -module(alice2).
 -behaviour(gen_alice2).
 
@@ -51,4 +58,3 @@ connection(Data) ->
                Pid_bob
            end,
   Data#state_data{bob_pid = BobPid}.
-

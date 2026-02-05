@@ -5,11 +5,11 @@ session is triggered by the completion of the other. The user generates the
 (separate) RM and CM modules for the relevant roles of each protocol and
 implements the necessary callbacks of each CM. The inter-session dependency is
 expressed as a local, non-blocking start of the second session from the first
-session’s completion callback.
+session's completion callback.
 
 Concretely, Alice begins by handling only the ping/pong session (Session A).
 When Alice reaches her s7 callback (after receiving pong and sending ping), she
-locally spawns the second session’s handler (Alice2) with start_link. Bob may
+locally spawns the second session's handler (Alice2) with start_link. Bob may
 send his request before or after that point; even if before, the request is
 only delivered once Alice2 is started (Bob waits until Alice2 is available).
 
@@ -17,7 +17,7 @@ only delivered once Alice2 is started (Bob waits until Alice2 is available).
 - Two sessions on the same node, with a start chained to the completion of the other:
   - Session A: Carol and Alice (pong -> ping)
   - Session B: Bob and Alice2 (request -> response)
-- Alice’s completion (s7 in Session A) triggers the start of Session B by
+- Alice's completion (s7 in Session A) triggers the start of Session B by
   calling `gen_alice2:start_link/2`, registering `alice2`.
 - Bob may attempt to send `{request}` before Alice2 exists; Bob will retry until
   `whereis(alice2)` returns a pid, so the request is effectively consumed only
@@ -40,13 +40,13 @@ only delivered once Alice2 is started (Bob waits until Alice2 is available).
   - Starts by scheduling an internal `{pong}` and sends it to Alice.
 
 This design purposefully avoids adding new state handlers. It
-uses a simple local action in Alice’s completion (s7) to spawn the second
-session, ensuring the causality “finish Session A, then start Session B.”
+uses a simple local action in Alice's completion (s7) to spawn the second
+session, ensuring the causality "finish Session A, then start Session B.”
 
 Notes:
-- The chaining is local and non-blocking: Alice’s s7 triggers `start_link` for
+- The chaining is local and non-blocking: Alice's s7 triggers `start_link` for
   Alice2 and then terminates.
-- Bob’s connection retry acts as backpressure: if Alice2 isn’t up yet, Bob
+- Bob's connection retry acts as backpressure: if Alice2 isn't up yet, Bob
   waits until it is, so the `{request}` is only delivered after the chain point.
 
 ## Layout
@@ -62,6 +62,14 @@ Requires Erlang/OTP 25+ and rebar3.
 ```sh
 cd examples/erlang/interleave_chaining
 rebar3 compile
+```
+
+## Run via mMST (recommended)
+
+From the project root:
+
+```sh
+./mMST.sh -run-erlang-examples
 ```
 
 ## Run
@@ -89,3 +97,10 @@ rebar3 shell --eval "application:ensure_all_started(interleaving)." --eval "time
   until it is. Alice2 then responds `{response}` to Bob and terminates.
 - All actors terminate cleanly.
 
+## Features demonstrated
+
+- Inter-session dependency
+
+## Logs
+
+The generated `gen_*` modules are built with `gen_statem` tracing enabled and write `*_debug.log` files into this directory.

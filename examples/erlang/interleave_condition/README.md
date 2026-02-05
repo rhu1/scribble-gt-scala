@@ -1,17 +1,15 @@
 # interleave_condition (Erlang)
 
-A tiny example that demonstrates ulti-session program, the user generates the (separate) RM and CM modules
-for the relevant roles of each protocol, and implements the necessary callbacks of each CM. Inter-
-session dependencies are expressed as deferring the handling of an incoming event in one session until 
-a local condition becomes true. In this case the local condition is Alice’s completion, which is used to 
+A tiny example that demonstrates inter-session dependencies. In this case they are expressed as deferring the handling of an incoming event in one session until 
+a local condition becomes true. In this case the local condition is Alice's completion, which is used to 
 coordinate the two concurrent sessions.
 
 ## What it shows
 - Two concurrent sessions running in the same node:
   - Session A: Alice and Carol (pong -> ping)
   - Session B: Bob and Alice2 (request -> response)
-- Alice2 will not consume Bob’s request until Alice has finished her own session. This creates the interleaving 
-constraint: “Alice first, then Alice2.”
+- Alice2 will not consume Bob's request until Alice has finished her own session. This creates the interleaving 
+constraint: "Alice first, then Alice2."
 - The deferral is implemented by re-enqueuing the incoming request locally with a small delay (50 ms) until the local 
 condition is satisfied.
 
@@ -26,12 +24,12 @@ registered name `alice` disappears.
     with `erlang:send_after(50, self(), {'$gen_cast', {BobPid, {request}}})` and keeps the current state.
     - If `whereis(alice)` is `undefined` (Alice finished), `alice2` proceeds to s7 and replies `{response}` to Bob.
 
-This design purposefully avoids adding new state handlers; it treats “Alice has finished” 
+This design purposefully avoids adding new state handlers; it treats "Alice has finished" 
 as the local readiness condition observed by `alice2`. This local condition may be set by some arbitrary local 
 computation or a local event triggered by (e.g.) the pong handler in the other session.
 
 Notes:
-- We use timed re-enqueueing instead of `postpone` because postponed events in gen_statem are typically retried when you 
+- We use timed re-enqueueing instead of `postpone` because postponed events in gen_statem are retried when you 
 transition out of the current state. Here we intentionally remain in s5 and retry later, so we re-enqueue explicitly.
 
 ## Layout
@@ -47,6 +45,14 @@ Requires Erlang/OTP 25+ and rebar3.
 ```sh
 cd examples/erlang/interleave_condition
 rebar3 compile
+```
+
+## Run via mMST (recommended)
+
+From the project root:
+
+```sh
+./mMST.sh -run-erlang-examples
 ```
 
 ## Run
@@ -72,3 +78,11 @@ rebar3 shell --eval "application:ensure_all_started(interleaving)." --eval "time
 - Carol sends `{pong}` to Alice; Alice replies `{ping}` and terminates.
 - Bob sends `{request}` to Alice2; Alice2 stashes the request until `whereis(alice)` is undefined, then responds `{response}` to Bob.
 - All actors terminate cleanly.
+
+## Features demonstrated
+
+- Inter-session dependency
+
+## Logs
+
+The generated `gen_*` modules are built with `gen_statem` tracing enabled and typically write `*_debug.log` files into this directory.

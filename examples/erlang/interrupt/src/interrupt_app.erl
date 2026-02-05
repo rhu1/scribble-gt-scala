@@ -1,5 +1,10 @@
 %%%-------------------------------------------------------------------
-%% @doc asynch public API
+%% @doc `interrupt` OTP application entrypoint.
+%%
+%% Standard OTP application wiring: starting `interrupt_sup` launches the
+%% protocol roles for the Interrupt demo.
+%%
+%% See `README.md` in this directory for run instructions and expected behaviour.
 %% @end
 %%%-------------------------------------------------------------------
 
@@ -14,4 +19,3 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
     ok.
-

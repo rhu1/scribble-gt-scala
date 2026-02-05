@@ -1,10 +1,20 @@
+%%-------------------------------------------------------------------
+%% @doc DistributedLogging demo role: `logs`.
+%%
+%% Role implementation module: this code implements the generated behaviour
+%% `gen_logs`. The generator provides a protocol-checked `gen_statem` wrapper
+%% and message API; this module supplies the role logic.
+%%
+%% Protocol source: `examples/scribble/DistributedLogging.scr`.
+%%-------------------------------------------------------------------
+
 -module(logs).
 -behaviour(gen_logs).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, make_choice_s9/1, s9/3, s10/3, s13/3, s5/3, s6/3]).
 
 -include("logs.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +26,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("logs initialized ~n", []),
     {ok, s1, Data}.
 
@@ -121,4 +131,3 @@ s1(cast, {ControllerPid, {start_logging, Int}}, Data) ->
         2 ->
             {next_state, s9, Data1, [{next_event, internal, {log_failure}}]}
     end.
-

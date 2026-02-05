@@ -1,10 +1,21 @@
+%%-------------------------------------------------------------------
+%% @doc Calculator demo role: `carol`.
+%%
+%% Role implementation module: this code implements the generated behaviour
+%% `gen_carol` produced by the Scribble-based code generator. The `gen_carol`
+%% wrapper provides the protocol-checked `gen_statem` runtime and message API;
+%% this module supplies the role-specific logic.
+%%
+%% The underlying protocol is defined in `examples/scribble/Calculator.scr`.
+%%-------------------------------------------------------------------
+
 -module(carol).
 -behaviour(gen_carol).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, make_choice_s7/1, s7/3, s8/3, s9/3, s11/3, s12/3, s5/3]).
 
 -include("carol.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), srv_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], srv_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +27,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {first}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("carol initialized ~n", []),
     {ok, s1, Data, [{next_event, internal, {first}}]}.
 

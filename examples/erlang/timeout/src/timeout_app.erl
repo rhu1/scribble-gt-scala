@@ -1,5 +1,10 @@
 %%%-------------------------------------------------------------------
-%% @doc other_pingpong public API
+%% @doc `timeout` OTP application entrypoint.
+%%
+%% Standard OTP application wiring: starting `timeout_sup` launches the roles
+%% for the Timeout demo derived from `examples/scribble/Timeout.scr`.
+%%
+%% See `README.md` in this directory for run instructions and expected behaviour.
 %% @end
 %%%-------------------------------------------------------------------
 

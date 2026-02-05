@@ -1,10 +1,16 @@
+%%-------------------------------------------------------------------
+%% @doc OnlineWallet demo role: `client`.
+%%
+%% Role implementation module: implements generated behaviour `gen_c`.
+%%-------------------------------------------------------------------
+
 -module(client).
 -behaviour(gen_c).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, s5/3, make_choice_s8/1, s8/3, s9/3, s10/3, s13/3, s14/3]).
 
 -include("c.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), a_pid :: pid() | undefined, s_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +22,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {login}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("c initialized ~n", []),
     {ok, s1, Data, [{next_event, internal, {login}}]}.
 
@@ -28,9 +34,11 @@ s3(cast, {APid, {login_success}}, #state_data{a_pid = APid} = Data) ->
 s3(cast, {APid, {login_failed}}, #state_data{a_pid = APid} = Data) ->
     {stop, normal, Data}.
 
--spec s5(cast, {pid(), {atom(), term(), term()}}, state_data()) ->
+-spec s5(cast, {pid(), {atom(), term(), term()} | {atom(), {term(), term()}}}, state_data()) ->
     {next_state, s8, state_data(), [{next_event, internal, {pay}}]} |
     {next_state, s8, state_data(), [{next_event, internal, {quit}}]}.
+s5(cast, {SPid, {account, {Balance, Overdraft}}}, Data) ->
+    s5(cast, {SPid, {account, Balance, Overdraft}}, Data);
 s5(cast, {SPid, {account, Balance, Overdraft}}, #state_data{s_pid = SPid} = Data) ->
     io:format("C: s5 Received account from S balance: ~p; overdraft: ~p~n", [Balance, Overdraft]),
     case make_choice_s8(Data) of
@@ -88,7 +96,7 @@ s9(cast, {SPid, {timeout}}, #state_data{s_pid = SPid} = Data) ->
 
 -spec make_choice_s8(state_data()) -> integer().
 make_choice_s8(_Data) ->
-    rand:uniform(2).
+    1.
 
 -spec s14(internal, {atom()}, state_data()) -> {stop, normal, state_data()}.
 s14(internal, {end_session}, #state_data{a_pid = APid} = Data) ->
@@ -127,4 +135,3 @@ connection(Data) ->
             Pid_s
     end,
     Data#state_data{a_pid = APid, s_pid = SPid}.
-

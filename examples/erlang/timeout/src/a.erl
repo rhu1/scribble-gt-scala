@@ -1,3 +1,10 @@
+%%-------------------------------------------------------------------
+%% @doc Timeout demo role: `a`.
+%%
+%% Role implementation module: implements generated behaviour `gen_a`.
+%% Protocol source: `examples/scribble/Timeout.scr`.
+%%-------------------------------------------------------------------
+
 -module(a).
 -behaviour(gen_a).
 
@@ -11,7 +18,7 @@
 	]).
 
 -include("a.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), b_pid :: pid() | undefined, c_pid :: pid() | undefined}.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -23,7 +30,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s4, state_data(), [{next_event, internal, {a1}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("a initialized ~n", []),
     {ok, s4, Data, [{next_event, internal, {a1}}]}.
 
@@ -64,7 +71,7 @@ s6(cast, {BPid, {'TOa'}}, #state_data{b_pid = BPid} = Data) ->
 
 -spec s7(cast, {pid(), {atom(), term()}}, state_data()) -> {stop, normal, state_data()}.
 s7(cast, {CPid, {a5}}, #state_data{c_pid = CPid} = Data) ->
-    io:format("C: s7 Received a5  from C ~p ~n", [CPid]),
+    io:format("A: s7 Received a5  from C ~p ~n", [CPid]),
     {stop, normal, Data}.
 
 -spec connection(state_data()) -> state_data().
@@ -87,4 +94,3 @@ connection(Data) ->
             Pid_c
     end,
     Data#state_data{b_pid = BPid, c_pid = CPid}.
-

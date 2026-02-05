@@ -1,10 +1,19 @@
+%%-------------------------------------------------------------------
+%% @doc CircuitBreaker demo role: `usr` (user).
+%%
+%% Minimal callback implementation executed under the generated wrapper
+%% `gen_usr`. The wrapper is responsible for protocol enforcement.
+%%
+%% This role represents a client/user interacting with the `api` role.
+%%-------------------------------------------------------------------
+
 -module(usr).
 -behaviour(gen_usr).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, s4/3, s8/3]).
 
 -include("usr.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), storage_pid :: pid() | undefined, api_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], storage_pid :: pid() | undefined, api_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,8 +25,8 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
-    io:format("user initialized ~n", []),
+    Data = #state_data{mc_path = []},
+    io:format("usr initialized ~n", []),
     {ok, s1, Data}.
 
 -spec connect(state_data()) -> state_data().
@@ -72,4 +81,3 @@ s8(cast, {APIPid, {error_response}}, #state_data{api_pid = APIPid} = Data) ->
     {next_state, s4, Data, [{next_event, internal, {request}}]};
 s8(cast, {APIPid, {timeout_notice}}, #state_data{api_pid = APIPid} = Data) ->
     {next_state, s4, Data, [{next_event, internal, {request}}]}.
-

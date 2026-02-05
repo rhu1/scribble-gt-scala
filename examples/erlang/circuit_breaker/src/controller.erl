@@ -1,10 +1,21 @@
+%%-------------------------------------------------------------------
+%% @doc CircuitBreaker demo role: `controller`.
+%%
+%% Hand-written callback module running under generated wrapper `gen_controller`.
+%% The wrapper enforces the protocol and provides mixed-choice / GC runtime
+%% support (via per-message metadata) when enabled.
+%%
+%% The controller role orchestrates mode changes and failure-handling between
+%% `api`, `storage`, and `usr` according to `CircuitBreaker.scr`.
+%%-------------------------------------------------------------------
+
 -module(controller).
 -behaviour(gen_controller).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, s4/3, s6/3, make_choice_s11/1, s11/3, s12/3, s15/3, s16/3, s19/3, s20/3, s8/3]).
 
 -include("controller.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), storage_pid :: pid() | undefined, api_pid :: pid() | undefined, usr_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], storage_pid :: pid() | undefined, api_pid :: pid() | undefined, usr_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +27,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {start_storage}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("controller initialized ~n", []),
     {ok, s1, Data, [{next_event, internal, {start_storage}}]}.
 
@@ -147,4 +158,3 @@ s1(internal, {start_storage},  Data) ->
     StoragePid = NewData#state_data.storage_pid,
     gen_controller:send_s1_start_storage(StoragePid, NewData),
     {next_state, s3, NewData, [{next_event, internal, {start_controller}}]}.
-

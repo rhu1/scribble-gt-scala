@@ -1,3 +1,15 @@
+%%-------------------------------------------------------------------
+%% @doc CircuitBreaker demo role: `api`.
+%%
+%% Hand-written callback module for the generated protocol wrapper `gen_api`.
+%% The wrapper (a `gen_statem`) enforces the Scribble protocol at runtime and
+%% delegates valid events to this module's state callbacks.
+%%
+%% The `api` role represents the API-facing component of the circuit breaker.
+%% It communicates with `usr`, `controller`, and `storage` according to the
+%% protocol in `examples/scribble/CircuitBreaker.scr`.
+%%-------------------------------------------------------------------
+
 -module(api).
 -behaviour(gen_api).
 
@@ -27,7 +39,7 @@
 ]).
 
 -include("api.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), storage_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], storage_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -39,7 +51,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("api initialized ~n", []),
     {ok, s1, Data}.
 
@@ -216,4 +228,3 @@ connect(Data) ->
     ControllerPid = retry_whereis(controller),
     UserPid = retry_whereis(usr),
     Data#state_data{storage_pid = StoragePid, controller_pid = ControllerPid, usr_pid = UserPid}.
-

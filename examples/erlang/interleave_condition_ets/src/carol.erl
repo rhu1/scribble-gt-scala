@@ -1,3 +1,9 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (ETS condition) role: `carol`.
+%%
+%% Role implementation module: implements generated behaviour `gen_carol`.
+%%-------------------------------------------------------------------
+
 -module(carol).
 -behaviour(gen_carol).
 
@@ -50,4 +56,3 @@ connection(Data) ->
                        Pid_alice
                end,
     Data#state_data{alice_pid = AlicePid}.
-

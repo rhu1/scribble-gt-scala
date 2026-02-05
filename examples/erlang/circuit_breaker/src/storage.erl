@@ -1,10 +1,18 @@
+%%-------------------------------------------------------------------
+%% @doc CircuitBreaker demo role: `storage`.
+%%
+%% Minimal callback implementation executed under the generated wrapper
+%% `gen_storage`. The wrapper enforces the Scribble protocol, so this module
+%% only implements the role-specific behaviours and demo choices.
+%%-------------------------------------------------------------------
+
 -module(storage).
 -behaviour(gen_storage).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, s8/3, s9/3, s12/3, s15/3]).
 
 -include("storage.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), api_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], api_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +24,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("storage initialized ~n", []),
     {ok, s1, Data}.
 

@@ -1,10 +1,20 @@
+%%-------------------------------------------------------------------
+%% @doc DistributedLogging demo role: `controller`.
+%%
+%% Role implementation module: this code implements the generated behaviour
+%% `gen_controller`. The generator provides a protocol-checked `gen_statem`
+%% wrapper and the send_* message API; this module supplies the role logic.
+%%
+%% Protocol source: `examples/scribble/DistributedLogging.scr`.
+%%-------------------------------------------------------------------
+
 -module(controller).
 -behaviour(gen_controller).
 
 -export([init/1, callback_mode/0, start_link/0, s1/3, make_choice_timeout/1, s9/3, make_choice_log_failure/1, make_choice_log_success/1, s10/3, make_choice_s13/1, s13/3, s5/3, s6/3]).
 
 -include("controller.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), logs_pid :: pid() | undefined}.
+-type state_data() :: #state_data{mc_path :: [atom()], logs_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +26,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {start_logging}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{mc_path = []},
     io:format("controller initialized ~n", []),
     {ok, s1, Data, [{next_event, internal, {start_logging}}]}.
 
@@ -49,9 +59,9 @@ s5(cast, {LogsPid, {ack}}, #state_data{logs_pid = LogsPid} = Data) ->
     {next_state, s6, Data, [{next_event, internal, {restart}}]}.
 
 -spec s6(internal, {atom()}, state_data()) -> {next_state, s9, state_data(), [{next_event, internal, {timeout}}]}.
-s6(internal, {restart}, #state_data{logs_pid = LogsPid} = Data) ->
+s6(internal, {restart}, #state_data{logs_pid = LogsPid, mc_path = Path} = Data) ->
     io:format("Controller: s6 Sending restart to Logs ~n", []),
-    Int = Data#state_data.mc_counter_1,
+    Int = length(Path),
     gen_controller:send_s6_restart(LogsPid, Int, Data),
     {next_state, s9, Data, [{next_event, internal, {timeout}}]}.
 
@@ -66,14 +76,14 @@ make_choice_log_failure(_Data) ->
     rand:uniform(2).
 
 -spec s13(internal, {atom()}, state_data()) -> {next_state, s9, state_data(), [{next_event, internal, {timeout}}]} | {stop, normal, state_data()}.
-s13(internal, {restart_logging}, #state_data{logs_pid = LogsPid} = Data) ->
+s13(internal, {restart_logging}, #state_data{logs_pid = LogsPid, mc_path = Path} = Data) ->
     io:format("Controller: s13 Sending restart_logging to Logs ~n", []),
-    Int = Data#state_data.mc_counter_1,
+    Int = length(Path),
     gen_controller:send_s13_restart_logging(LogsPid, Int, Data),
     {next_state, s9, Data, [{next_event, internal, {timeout}}]};
-s13(internal, {stop_logging}, #state_data{logs_pid = LogsPid} = Data) ->
+s13(internal, {stop_logging}, #state_data{logs_pid = LogsPid, mc_path = Path} = Data) ->
     io:format("Controller: s13 Sending stop_logging to Logs ~n", []),
-    Int = Data#state_data.mc_counter_1,
+    Int = length(Path),
     gen_controller:send_s13_stop_logging(LogsPid, Int, Data),
     {stop, normal, Data}.
 
@@ -127,7 +137,6 @@ s1(internal, {start_logging}, Data) ->
     Data1 = connect(Data),
     LogsPid = Data1#state_data.logs_pid,
     io:format("Controller: s1 Sending start_logging to Logs ~n", []),
-    Int = Data1#state_data.mc_counter_1,
+    Int = length(Data1#state_data.mc_path),
     gen_controller:send_s1_start_logging(LogsPid, Int, Data1),
     {next_state, s9, Data1, [{next_event, internal, {timeout}}]}.
-

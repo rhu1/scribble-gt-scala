@@ -1,3 +1,12 @@
+%%-------------------------------------------------------------------
+%% @doc Interleaving demo (chaining) role: `alice`.
+%%
+%% Role implementation module: implements generated behaviour `gen_alice`.
+%% The generator supplies the protocol-checked `gen_statem` wrapper and message
+%% API; this module provides the role logic for the example.
+%%
+%%-------------------------------------------------------------------
+
 -module(alice).
 -behaviour(gen_alice).
 

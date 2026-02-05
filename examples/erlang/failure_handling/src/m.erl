@@ -11,7 +11,8 @@
 	]).
 
 -include("m.hrl").
--type state_data() :: #state_data{mc_counter_1 :: integer(), w_pid :: pid() | undefined, fd_pid :: pid() | undefined}.
+%% state_data record is defined in m.hrl (mc_path + peer pids). Keep type alias in sync.
+-type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -23,7 +24,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {init}}]}.
 init([]) ->
-    Data = #state_data{mc_counter_1 = 0},
+    Data = #state_data{},
     io:format("m initialized ~n", []),
     {ok, s1, Data, [{next_event, internal, {init}}]}.
 
@@ -78,4 +79,3 @@ connection(Data) ->
             Pid_fd
     end,
     Data#state_data{w_pid = WPid, fd_pid = FdPid}.
-
