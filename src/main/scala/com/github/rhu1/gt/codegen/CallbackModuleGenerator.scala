@@ -62,16 +62,11 @@ object CallbackModuleGenerator {
       .collect { case r: GTVRecv => RecvSig(r.role.toString, r.op.toString, r.pay.elems.size()) }
       .toSet.toList.sortBy(rs => (rs.role, rs.op, rs.arity))
 
-    val eventTypeUnion:
-      String = if (tauOps.nonEmpty && recvSigs.nonEmpty) "internal | cast"
-               else if (tauOps.nonEmpty) "internal"
-               else if (recvSigs.nonEmpty) "cast"
-               else "gen_statem:event_type()"
-
-    def payloadType(op: String, arity: Int): String =
-      if (arity == 0) s"{${erlAtom(op)}}"
-      else if (arity == 1) s"{${erlAtom(op)}, term()}"
-      else s"{${erlAtom(op)}, {" + List.fill(arity)("term()" ).mkString(", ") + "}}"
+    val eventTypeUnion: String =
+      if (tauOps.nonEmpty && recvSigs.nonEmpty) "internal | cast"
+      else if (tauOps.nonEmpty) "internal"
+      else if (recvSigs.nonEmpty) "cast"
+      else "gen_statem:event_type()"
 
     val internalArgTypes: List[String] = tauOps.map(op => s"{${erlAtom(op)}}")
     val castArgTypes: List[String] = recvSigs.map { rs => s"{pid(), ${payloadType(rs.op, rs.arity)}}" }
@@ -97,18 +92,29 @@ object CallbackModuleGenerator {
     SigPieces(eventTypeUnion, msgArgUnion, retUnion)
   }
 
-  private def payloadPattern(op: String, arity: Int): (String, List[String]) = {
-    if (arity == 0) (s"{${erlAtom(op)}}", Nil)
-    else if (arity == 1) (s"{${erlAtom(op)}, V1}", List("V1"))
-    else {
-      val vs = (1 to arity).map(i => s"V${i}").toList
-      (s"{${erlAtom(op)}, {" + vs.mkString(", ") + "}}", vs)
+  // Canonical message encoding:
+  //  - arity 0: {op}
+  //  - arity 1: {op, {Arg}}
+  //  - arity n: {op, {A1, ..., An}}
+  private def payloadType(op: String, arity: Int): String = {
+    arity match {
+      case 0 => s"{${erlAtom(op)}}"
+      case 1 => s"{${erlAtom(op)}, {term()}}"
+      case n => s"{${erlAtom(op)}, {" + List.fill(n)("term()").mkString(", ") + "}}"
+    }
+  }
+
+  private def payloadPatternWithVars(op: String, varNames: List[String]): String = {
+    varNames match {
+      case Nil => s"{${erlAtom(op)}}"
+      case one :: Nil => s"{${erlAtom(op)}, {${one}}}"
+      case many => s"{${erlAtom(op)}, {" + many.mkString(", ") + "}}"
     }
   }
 
   private def underscorePayloadPattern(op: String, arity: Int): String = {
     if (arity == 0) s"{${erlAtom(op)}}"
-    else if (arity == 1) s"{${erlAtom(op)}, _}"
+    else if (arity == 1) s"{${erlAtom(op)}, {_}}"
     else s"{${erlAtom(op)}, {" + List.fill(arity)("_").mkString(", ") + "}}"
   }
 
@@ -116,7 +122,6 @@ object CallbackModuleGenerator {
 
   private def hasTauAndRecv(efsm: GTEFSM, state: GTVState): Boolean = state.isEntry
 
-  // Final-state detector: true when there are no outgoing edges from state
   private def isEndState(efsm: GTEFSM, state: GTVState): Boolean = {
     org.scribble.ext.gt.codegen.erlang.GTGenUtil.filterEdgesByState(efsm, state).isEmpty
   }
@@ -267,8 +272,6 @@ object CallbackModuleGenerator {
                 val roleVar = capFirst(ss.roleAtom) + "Pid"
                 val pidLine = s"    ${roleVar} = ${dataVar}#state_data.${roleLower}_pid,\n"
 
-                // Internal actions don't bind payload variables. If a send needs payload terms,
-                // synthesize explicit placeholders so the generated module compiles.
                 val payloadArgs: String =
                   if (ss.arity > 0) ", " + List.fill(ss.arity)("undefined").mkString(", ")
                   else ""
@@ -300,10 +303,10 @@ object CallbackModuleGenerator {
                 if (idx == 0) n else s"${n}${idx + 1}"
               }
             }
-            val (payloadPatWithVars, payloadVars) =
-              if (arity == 0) (s"{${erlAtom(op)}}", Nil)
-              else if (arity == 1) (s"{${erlAtom(op)}, ${varNames.head}}", List(varNames.head))
-              else (s"{${erlAtom(op)}, {" + varNames.mkString(", ") + "}}", varNames)
+
+            val payloadPatWithVars = payloadPatternWithVars(op, varNames)
+            val payloadVars = varNames
+
             val senderField = r.role.toString.toLowerCase + "_pid"
             val k = Key("recv", op, r.role.toString, arity)
             if (seen(k)) None else {
@@ -432,7 +435,6 @@ object CallbackModuleGenerator {
 
     val choiceHelpers = stateChoiceFuncs
 
-    // Do not emit gc_timeout/on_gc hooks; GC is handled by gen_<role>.erl's stale/path logic.
     val gcHooks: String = ""
 
     val finalBody = {
