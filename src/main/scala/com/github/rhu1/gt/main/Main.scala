@@ -10,6 +10,10 @@ import org.scribble.ext.gt.cli.GTCommandLine2
 import org.scribble.ext.gt.codegen.erlang.{GTCallbackModule, GTGenericBehaviour, GTGenRoleGen, GTRoleGen}
 import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVState}
 
+import java.io.File
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
 import scala.jdk.CollectionConverters.*
 
 // TODO
@@ -18,6 +22,7 @@ import scala.jdk.CollectionConverters.*
 
 trait CLArg {}
 
+// Analysis
 object CheckFidelity extends CLArg {
     def unapply(x: CLArg): Boolean = x == this //x.isInstanceOf[CheckFidelity.type]
 }
@@ -41,6 +46,18 @@ object GenerateBehaviourAll extends CLArg {
 object GenerateAllModulesAll extends CLArg {
     def unapply(x: CLArg): Boolean = x == this
 }
+
+// Code generation (Erlang runtime + role implementation)
+object GenerateErlangFSMsAll extends CLArg {
+    def unapply(x: CLArg): Boolean = x == this
+}
+
+case class GenerateErlangFSMs(
+    simple: GProtoName,
+    roles: Seq[Role] = Seq.empty,
+    outDir: String = "./generated",
+    emitGC: Boolean = false
+) extends CLArg {}
 
 // simple name (not fully qualified); r is GT Role
 case class PrintEFSM(simple: GProtoName, r: Role) extends CLArg {}
@@ -72,24 +89,77 @@ object Main {
             case "-gt-generate-behaviour" :: n :: r :: tail => cs(GenerateBehaviour(new GProtoName(n), Role(r)), parseArgs(tail))
             case "-gt-generate-erlang-all" :: tail => cs(GenerateAllModulesAll, parseArgs(tail))
             case "-gt-generate-erlang" :: n :: r :: tail => cs(GenerateAllModules(new GProtoName(n), Role(r)), parseArgs(tail))
+
+            // New: generate FSM-based Erlang modules (gen_role + role.erl + role.hrl)
+            case "-gt-generate-fsms-all" :: tail => cs(GenerateErlangFSMsAll, parseArgs(tail))
+            case "-gt-generate-fsms" :: n :: tail =>
+                // Parse optional flags: -roles ... -out DIR -gc
+                val (roles, outDir, emitGC, rest) = parseCodegenTail(Seq.empty, "./generated", true, tail)
+                cs(GenerateErlangFSMs(new GProtoName(n), roles.map(Role.apply), outDir, emitGC), parseArgs(rest))
+
+            case "-gt-help" :: tail => cs(Help, parseArgs(tail))
+            case "-h" :: tail => cs(Help, parseArgs(tail))
+
             case h :: t => cf(h, parseArgs(t))
         }
 
+    private object Help extends CLArg {
+        def unapply(x: CLArg): Boolean = x == this
+    }
+
+    private def usage(): Unit = {
+        println(
+            s"""
+               |Usage:
+               |  sbt "runMain com.github.rhu1.gt.main.Main <path/to/file.scr> [GT options]"
+               |
+               |FSM-based Erlang generation:
+               |  -gt-generate-fsms <ProtoSimpleName> [-all | -roles R1 R2 ...] [-out DIR] [-gc]
+               |  -gt-generate-fsms-all
+               |
+               |Flags:
+               |  -roles ...    Generate only for the listed roles (space-separated)
+               |  -all          Generate for all roles (default if -roles is omitted)
+               |  -out DIR      Output base directory (default: ./generated)
+               |  -gc           Enable idle GC support (gc_timeout/0, on_gc/2 hooks and runtime scheduling)
+               |""".stripMargin
+        )
+    }
+
+    // Parse generator flags after -gt-generate-fsms <Proto>
+    private def parseCodegenTail(
+        roles: Seq[String],
+        outDir: String,
+        emitGC: Boolean,
+        args: List[String]
+    ): (Seq[String], String, Boolean, List[String]) = args match {
+        case Nil => (roles, outDir, emitGC, Nil)
+        case "-roles" :: tail =>
+            val (rs, rest) = tail.span(s => !s.startsWith("-"))
+            parseCodegenTail(roles ++ rs, outDir, emitGC, rest)
+        case "-all" :: tail =>
+            // Explicitly clear any previously-set roles
+            parseCodegenTail(Seq.empty, outDir, emitGC, tail)
+        case "-out" :: dir :: tail =>
+            parseCodegenTail(roles, dir, emitGC, tail)
+        case "-gc" :: tail =>
+            parseCodegenTail(roles, outDir, true, tail)
+        case "-proto" :: _ :: _ =>
+            // -proto is handled at the top-level (selecting which protocol to generate)
+            // so stop consuming flags here.
+            (roles, outDir, emitGC, args)
+        case other :: _ =>
+            // Stop parsing when we hit something we don't recognise; let outer parseArgs handle it.
+            (roles, outDir, emitGC, args)
+    }
+
     def main(args: Array[String]): Unit = {
-
-        // GTCommandLine2 Test4.scr (-fair -v)
-        // -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-
-        // org.scribble.ext.gt.cli.GTCommandLine2
-        // [-gt-explicit-observer-left-commits] -fair -v C:\Users\Raymond\winroot\home\eey335\code\java\intellij\git\github.com\rhu1-scribble-core-gt\scribble-java\scribble-test\src\test\scrib\tmp\Test4.scr
-        //new GTCommandLine2()
-        //GTCommandLine2.main(Array("-fair", "-v", "C:\\Users\\Raymond\\winroot\\home\\eey335\\code\\java\\intellij\\git\\github.com\\rhu1-scribble-core-gt\\scribble-java\\scribble-test\\src\\test\\scrib\\tmp\\Test4.scr"))
-        //GTCommandLine2.main(Array("-fair", "-v", System.getProperty("user.dir") + "\\src\\test\\scrib\\Test.scr"))
-
         val (baseargs, gtargs) = parseArgs(args.toList)
-        val fileName = if (baseargs.nonEmpty) {
-            baseargs.head
-        } else {
-            System.getProperty("user.dir") + "/src/test/scrib/Test.scr"
+        val fileName = if (baseargs.nonEmpty) baseargs.head else System.getProperty("user.dir") + "/src/test/scrib/Test.scr"
+
+        if (gtargs.exists(_.isInstanceOf[Help.type])) {
+            usage()
+            return
         }
 
         val parsed = collection.immutable.Map(
@@ -130,12 +200,14 @@ object Main {
         val efsms = projected.map((n, rL) => {
             val rcom = translated(n).getRoleCommitting
             (n, rL.map((r, _L) => {
+                // Reset state numbering per (protocol, role) generation run.
+                // (Previously done in CodegenCLI; needed because GTVState uses a global counter.)
+                GTVState.resetCounter()
                 val s_init = new GTVState(GTVState.TOP_SCOPE)
                 val end = new GTVState(GTVState.TOP_SCOPE)
                 (r, _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end).toGTEFSM)
             }))
         })
-      println("BOOOOOOOOOOO==============" + efsms)
 
         // Helper function to generate callback modules with access to translated protocols
         def generateCallbackModule(n: GProtoName, r: Role, efsm: GTEFSM): Unit = {
@@ -191,6 +263,46 @@ object Main {
                 case e: Exception =>
                     println(s"\n[GT] Unexpected error generating Behaviour Module for $n@$r: ${e.getMessage}")
             }
+        }
+
+        // Helper: generate the FSM-based Erlang modules (gen_role + role.erl + role.hrl)
+        def generateFSMModules(
+            protoSimple: String,
+            r: Role,
+            efsm: GTEFSM,
+            allRolesLower: Seq[String],
+            outBase: String,
+            emitGC: Boolean
+        ): Unit = {
+            val roleAtom = r.toString.toLowerCase
+            val outDir = new File(outBase, protoSimple)
+            outDir.mkdirs()
+
+            writeHrl(outDir, roleAtom, allRolesLower)
+
+            com.github.rhu1.gt.codegen.RuntimeModuleGenerator.generate(protoSimple, roleAtom, efsm, outDir, emitGC = emitGC)
+            com.github.rhu1.gt.codegen.CallbackModuleGenerator.generateCallback(protoSimple, roleAtom, efsm, outDir, allRolesLower, emitGC = emitGC)
+
+            println(s"\n[GT] Wrote gen_${roleAtom}.erl / ${roleAtom}.erl / ${roleAtom}.hrl to ${outDir.getPath} (gc=$emitGC)")
+        }
+
+        def writeHrl(outDir: File, roleAtom: String, rolesLower: Seq[String]): Unit = {
+            val hrlPath = outDir.toPath.resolve(s"${roleAtom}.hrl")
+            val peerRoles = rolesLower.filterNot(_ == roleAtom)
+            val mcPathField = "mc_path = [] :: [atom()]"
+            val peerFields = if (peerRoles.nonEmpty) peerRoles.map(r => s"${r}_pid :: pid() | undefined").mkString(", ") else ""
+            val allFields = List(Some(mcPathField), if (peerFields.nonEmpty) Some(peerFields) else None).flatten.mkString(", ")
+            val record = s"-record(state_data, {${allFields}})."
+            val content =
+                s"""
+                   |-ifndef(${roleAtom.toUpperCase}_HRL).
+                   |-define(${roleAtom.toUpperCase}_HRL, true).
+                   |
+                   |${record}
+                   |
+                   |-endif.
+                   |""".stripMargin
+            Files.write(hrlPath, content.getBytes(StandardCharsets.UTF_8))
         }
 
         gtargs.foreach {
@@ -257,6 +369,31 @@ object Main {
                 val full = findFullName(simple)
                 generateCallbackModule(full, r, efsms(full)(r))
                 generateBehaviourModule(full, r, efsms(full)(r))
+
+            // New: generate FSM-based Erlang modules (gen_role + role.erl + role.hrl)
+            case GenerateErlangFSMsAll() =>
+                for ((n, rM) <- efsms) {
+                    val protoSimple = n.getLastElement
+                    val allRolesLower = translated(n).getLiveRoles.toSeq.map(_.toString.toLowerCase)
+                    for ((r, _M) <- rM) {
+                        generateFSMModules(protoSimple, r, _M, allRolesLower, "./generated", emitGC = false)
+                    }
+                }
+
+            case GenerateErlangFSMs(simple, roles, outDir, emitGC) =>
+                val full = findFullName(simple)
+                val protoSimple = full.getLastElement
+                val gtype = translated(full)
+
+                val roleSet: Seq[Role] =
+                    if (roles.nonEmpty) roles
+                    else efsms(full).keys.toSeq
+
+                val allRolesLower = gtype.getLiveRoles.toSeq.map(_.toString.toLowerCase)
+                roleSet.foreach { r =>
+                    val efsm = efsms(full)(r)
+                    generateFSMModules(protoSimple, r, efsm, allRolesLower, outDir, emitGC)
+                }
 
             case x => throw new RuntimeException(s"Unknown arg: $x")
         }

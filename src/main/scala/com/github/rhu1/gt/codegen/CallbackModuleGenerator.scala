@@ -261,14 +261,22 @@ object CallbackModuleGenerator {
               val nstates = nextStatesFor(pairs)
               val dataVar = if (connectHere) "Data1" else "Data"
               val connectLine = if (connectHere) "    Data1 = connect(Data),\n" else ""
+
               val sendLines = sends.flatMap { ss =>
                 val roleLower = ss.roleAtom.toLowerCase
                 val roleVar = capFirst(ss.roleAtom) + "Pid"
                 val pidLine = s"    ${roleVar} = ${dataVar}#state_data.${roleLower}_pid,\n"
-                val args = if (ss.arity > 0) (ss.varNames :+ dataVar).mkString(", ") else dataVar
-                val call = s"    gen_${roleAtom}:send_${sname}_${ss.op}(${roleVar}${if (ss.arity>0) ", " + ss.varNames.mkString(", ") else ""}, ${dataVar}),\n"
+
+                // Internal actions don't bind payload variables. If a send needs payload terms,
+                // synthesize explicit placeholders so the generated module compiles.
+                val payloadArgs: String =
+                  if (ss.arity > 0) ", " + List.fill(ss.arity)("undefined").mkString(", ")
+                  else ""
+
+                val call = s"    gen_${roleAtom}:send_${sname}_${ss.op}(${roleVar}${payloadArgs}, ${dataVar}),\n"
                 List(pidLine, call)
               }.mkString("")
+
               val finalExpr = nstates.headOption match {
                 case Some(ns) => nextExprForSucc(efsm, ns, dataVar)
                 case None     => s"{keep_state, ${dataVar}}"
@@ -424,24 +432,14 @@ object CallbackModuleGenerator {
 
     val choiceHelpers = stateChoiceFuncs
 
-    val gcHooks: String = if (emitGC)
-      s"""
-         |%% GC hooks (used by runtime for idle GC)
-         |-export([gc_timeout/0, on_gc/2]).
-         |
-         |-spec gc_timeout() -> undefined | non_neg_integer().
-         |gc_timeout() -> 5000.
-         |
-         |-spec on_gc(StateName :: atom(), Data :: state_data()) -> {next_event, internal, term()} | ignore.
-         |on_gc(_State, _Data) -> {next_event, internal, {timeout}}.
-         |""".stripMargin
-    else ""
+    // Do not emit gc_timeout/on_gc hooks; GC is handled by gen_<role>.erl's stale/path logic.
+    val gcHooks: String = ""
 
     val finalBody = {
       val withChoices = if (choiceHelpers.nonEmpty)
         finalBody0 + "\n\n%% ---------- Choice helpers ----------\n" + choiceHelpers + "\n"
       else finalBody0
-      if (emitGC) withChoices + "\n" + gcHooks + "\n" else withChoices
+      withChoices
     }
 
     val outFile = new File(outDir, s"${roleAtom}.erl")
@@ -450,5 +448,4 @@ object CallbackModuleGenerator {
   }
 
 }
-
 
