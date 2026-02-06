@@ -6,7 +6,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 # If set, the image will `git clone` the repo instead of using the local build context.
 ARG REPO_URL=https://github.com/rhu1/scribble-gt-scala.git
 ARG GIT_REF=gen
-ARG USE_GIT_CLONE=0
+ARG USE_GIT_CLONE=1
 
 WORKDIR /scribble-gt-scala
 
@@ -17,7 +17,7 @@ RUN apt-get update -y \
 # Stage local context somewhere we can copy from (when USE_GIT_CLONE=0).
 COPY . /tmp/local-src
 
-# Populate /scribble-gt-scala either by cloning or by copying the local build context.
+# Populate /scribble-gt-scala by cloning
 RUN if [ "$USE_GIT_CLONE" = "1" ]; then \
       rm -rf /scribble-gt-scala/* && \
       git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" /scribble-gt-scala ; \

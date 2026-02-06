@@ -150,37 +150,21 @@ Notes on the artifact.
 
 **Steps** for starting from scratch.
 
-1. Put the Docker image `oopsla26-paper321-artifact.tar.gz` in some
-   local directory.  In these steps, we will refer to this directory as
-   `$MY_LOCAL_DIR`.
+1. **Build the Docker image from this repository (default).**
 
-   **Note (multi-platform image format).**
-   The file `oopsla26-paper321-artifact.tar.gz` is a gzipped OCI image archive
-   that contains both `linux/amd64` and `linux/arm64` variants.
-
-2. Check that Docker is running.
-
-3. Load the image and launch a container with an interactive session.
-   In `$MY_LOCAL_DIR`, do:
-   ```sh
-   docker load -i oopsla26-paper321-artifact.tar.gz
-   docker run -it --rm --entrypoint /bin/bash scribble-gt
-   ```
-   (`bash` is the recommended shell for this artifact because `mMST.sh` is a bash script.)
-
-   **Optional quick (non-interactive) sanity checks**.  Instead of opening an interactive shell, you can run:
-
-   ```sh
-   docker run --rm --entrypoint /bin/bash scribble-gt -lc "./mMST.sh -run-scribble-examples"
-   docker run --rm --entrypoint /bin/bash scribble-gt -lc "./mMST.sh -run-erlang-examples"
-   ```
-
-   **If the prebuilt image does not load/run (local rebuild fallback).**
-   You can rebuild the image locally from this dockerfile.
-   This builds for your current machine's platform only:
+   From the repository root directory, run:
    ```sh
    docker build -t scribble-gt:local .
    docker run -it --rm --entrypoint /bin/bash scribble-gt:local
+   ```
+
+3. **Optional quick (non-interactive) sanity checks**.
+
+   Instead of opening an interactive shell, you can run:
+
+   ```sh
+   docker run --rm --entrypoint /bin/bash scribble-gt:local -lc "./mMST.sh -run-scribble-examples"
+   docker run --rm --entrypoint /bin/bash scribble-gt:local -lc "./mMST.sh -run-erlang-examples"
    ```
 
 4. **Test: Protocol validation and code generation.**
