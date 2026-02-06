@@ -14,9 +14,12 @@ RUN apt-get update -y \
  && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
+# Stage local context somewhere we can copy from (when USE_GIT_CLONE=0).
 COPY . /tmp/local-src
 
+# Populate /scribble-gt-scala either by cloning or by copying the local build context.
 RUN if [ "$USE_GIT_CLONE" = "1" ]; then \
+      rm -rf /scribble-gt-scala/* && \
       git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" /scribble-gt-scala ; \
     else \
       cp -a /tmp/local-src/. /scribble-gt-scala/ ; \
@@ -28,27 +31,23 @@ FROM eclipse-temurin:21-jdk-jammy AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG BAZELISK_VERSION=1.28.0
-ARG REBAR3_VERSION=3.19.0
+ARG REBAR3_VSN=3.24.0
 
-# Enable Ubuntu "universe" (often needed for nsis/elixir on minimal images)
-RUN apt-get update -y \
- && apt-get install -y --no-install-recommends software-properties-common ca-certificates \
- && add-apt-repository -y universe \
- && rm -rf /var/lib/apt/lists/*
-
-# Tools
+# Tools (include Erlang/OTP 27 + Python3)
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends \
-      curl gnupg git openssh-client \
+      curl gnupg ca-certificates \
+      git openssh-client \
       make python3 zip graphviz wget \
-      elixir erlang-dev erlang-eunit erlang-common-test erlang-dialyzer \
-      erlang-debugger erlang-parsetools erlang-runtime-tools erlang-os-mon erlang-ssl \
+      erlang rebar3 \
+      elixir \
       nsis tofrodos mandoc bsdmainutils \
+      software-properties-common \
  && rm -rf /var/lib/apt/lists/*
 
-# Rebar3: install upstream escript (more stable across arch than some distro packages)
+# Pin rebar3 (overwrite OS package version)
 RUN curl -fsSL -o /usr/local/bin/rebar3 \
-      "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+      "https://github.com/erlang/rebar3/releases/download/${REBAR3_VSN}/rebar3" \
  && chmod +x /usr/local/bin/rebar3
 
 # Install sbt from the official repo
@@ -60,11 +59,10 @@ RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/so
  && apt-get install -y --no-install-recommends sbt \
  && rm -rf /var/lib/apt/lists/*
 
-# Bazelisk (Bazel docs recommend Bazelisk on Ubuntu) :contentReference[oaicite:2]{index=2}
+# Bazelisk
 RUN curl -fsSL -o /usr/local/bin/bazel \
       "https://github.com/bazelbuild/bazelisk/releases/download/v${BAZELISK_VERSION}/bazelisk-linux-amd64" \
  && chmod +x /usr/local/bin/bazel
-# (Bazelisk versions are published on GitHub releases.) :contentReference[oaicite:3]{index=3}
 
 WORKDIR /scribble-gt-scala
 
@@ -76,35 +74,28 @@ RUN --mount=type=cache,target=/root/.ivy2 \
     --mount=type=cache,target=/root/.cache/coursier \
     sbt -batch -Dsbt.supershell=false update
 
-RUN --mount=type=cache,target=/root/.ivy2 \
-    --mount=type=cache,target=/root/.sbt \
-    --mount=type=cache,target=/root/.cache/coursier \
-    sbt -batch -Dsbt.supershell=false compile test:compile
+# NOTE: we do not run `sbt compile` during docker build.
 
-RUN --mount=type=cache,target=/root/.ivy2 \
-    --mount=type=cache,target=/root/.sbt \
-    --mount=type=cache,target=/root/.cache/coursier \
-    sbt -batch -Dsbt.supershell=false "show assembly / packagedArtifact" || true
 
 
 FROM eclipse-temurin:21-jdk-jammy AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG REBAR3_VERSION=3.19.0
+ARG REBAR3_VSN=3.23.0
 
 # Minimal runtime deps for using generated Erlang demos inside the container
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends \
+      erlang rebar3 \
       make bash nano less vim-tiny \
-      elixir \
-      erlang-dev erlang-eunit \
-      erlang-runtime-tools erlang-os-mon erlang-ssl \
+      python3 \
       graphviz \
+      curl ca-certificates \
+      elixir \
  && rm -rf /var/lib/apt/lists/*
 
-# Rebar3: install upstream escript
 RUN curl -fsSL -o /usr/local/bin/rebar3 \
-      "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+      "https://github.com/erlang/rebar3/releases/download/${REBAR3_VSN}/rebar3" \
  && chmod +x /usr/local/bin/rebar3
 
 # sbt is needed at runtime because mMST.sh calls `sbt runMain ...`

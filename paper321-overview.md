@@ -176,12 +176,9 @@ Notes on the artifact.
    ```
 
    **If the prebuilt image does not load/run (local rebuild fallback).**
-   You can rebuild the image locally from this repository.
-
-   **Option A (single-platform, fastest).**
+   You can rebuild the image locally from this dockerfile.
    This builds for your current machine's platform only:
    ```sh
-   cd /path/to/scribble-gt-scala
    docker build -t scribble-gt:local .
    docker run -it --rm --entrypoint /bin/bash scribble-gt:local
    ```
@@ -383,8 +380,9 @@ All Erlang code generation is driven via the Scala `Main` entry point:
 
 The EFSM-based Erlang generator is exposed as:
 
-- `-gt-generate-efsms <ProtoSimpleName> [-all | -roles R1 R2 ...] [-out DIR]`
-- `-gt-generate-efsms-all`
+```sh
+./mMST.sh -proto <ProtocolName> examples/scribble/<FileName.scr>
+```
 
 ---
 
@@ -418,7 +416,7 @@ Minor syntax/notation differences.
 
 Minor corrections.
 
-- In Fig. 7 (RHS) in the paper:
+- In Fig. 8 (RHS) in the paper:
   - Lines 5 and 6 should be swapped.
   - There should be an additional line `Ack() from Q to P;` between lines 9
     and 10.

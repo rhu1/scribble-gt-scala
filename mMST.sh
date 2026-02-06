@@ -22,7 +22,7 @@ usage() {
   -h, --help                Show this info and exit
   -v, --verbose             Verbose shell output (does not affect Scala CLI)
 
-  Codegen flags (passed to Main):
+ Codegen flags (passed to Main):
   -proto Name               Generate only for the named protocol inside the .scr
   -all                      Generate for all roles (default if -roles is omitted)
   -roles R1 R2 ...          Generate only for the listed roles (space-separated)
@@ -177,56 +177,128 @@ if [ "$usage" = 0 ] && [ -z "$SCRFILE" ] && [ "$run_scribble_examples" = 0 ] && 
   exit 1
 fi
 
-# Default mode selection:
-#  - If any explicit -gt-* mode is chosen, use it.
-#  - Else if -proto is provided (optionally with -roles/-out/-no-gc), run code generation for that protocol.
-#  - Else default to checking the file via fidelity.
-if [ -z "$GT_MODE" ]; then
-  if [ -n "$PROTO_SIMPLE" ]; then
-    GT_MODE="gen_efsms"
+# Track if a main-mode action already ran (so we don't fall through to default Main invocation)
+DID_RUN=0
+
+run_main() {
+  local scrfile="$1"; shift
+  local args=("$scrfile" "$@")
+  cd "$SCRIBHOME" || exit 1
+  sbt "runMain com.github.rhu1.gt.main.Main ${args[*]}"
+}
+
+run_check_file() {
+  local scrfile="$1"
+  # Validation only (fidelity by default)
+  run_main "$scrfile" -gt-check-fidelity
+}
+
+run_generate_all_for_file() {
+  local scrfile="$1"
+  # Projection + generation for all protocols/roles in the file.
+  # We rely on Main's default behaviour when no -proto is provided.
+  run_main "$scrfile"
+}
+
+# Run checks for all Scribble examples
+if [ "$run_scribble_examples" = 1 ]; then
+  FAILURES=0
+
+  while IFS= read -r -d '' f; do
+    echo "============================================================"
+    echo "==> Validating (fidelity): $f"
+    if ! run_check_file "$f"; then
+      echo "FAIL (validate): $f" >&2
+      FAILURES=$((FAILURES+1))
+      continue
+    fi
+    echo "PASS (validate): $f"
+
+    echo "==> Projecting + generating: $f"
+    if ! run_generate_all_for_file "$f"; then
+      echo "FAIL (generate): $f" >&2
+      FAILURES=$((FAILURES+1))
+      continue
+    fi
+    echo "PASS (generate): $f"
+  done < <(find "$SCRIBHOME/examples/scribble" -type f -name '*.scr' -print0 | sort -z)
+
+  if [ "$FAILURES" -ne 0 ]; then
+    echo "FAILURES ($FAILURES)" >&2
+    exit 1
+  fi
+  DID_RUN=1
+fi
+
+# Compile, start, stop all OTP examples
+if [ "$run_erlang_examples" = 1 ]; then
+  # Reuse the existing scripts if present
+  if [ -x "$SCRIBHOME/scripts/test_generated_otp_apps.sh" ]; then
+    if [ "$quiet_erlang_examples" = 1 ]; then
+      "$SCRIBHOME/scripts/test_generated_otp_apps.sh" -q "$SCRIBHOME/examples/erlang"
+    else
+      "$SCRIBHOME/scripts/test_generated_otp_apps.sh" "$SCRIBHOME/examples/erlang"
+    fi
+    DID_RUN=1
   else
-    GT_MODE="check_fidelity"
+    echo "Error: scripts/test_generated_otp_apps.sh not found or not executable" >&2
+    exit 1
   fi
 fi
 
-# Build the Main invocation
-MAIN_ARGS=()
-MAIN_ARGS+=("$SCRFILE")
+# Default path: run Scala Main on one SCRFILE
+if [ "$DID_RUN" = 0 ]; then
+  if [ "$verbose" = 1 ]; then
+    set -x
+  fi
 
-case "$GT_MODE" in
-  check_fidelity)
-    MAIN_ARGS+=("-gt-check-fidelity")
-    ;;
-  check_completeness)
-    MAIN_ARGS+=("-gt-check-completeness")
-    ;;
-  gen_efsms_all)
-    MAIN_ARGS+=("-gt-generate-efsms-all")
-    ;;
-  gen_efsms)
-    if [ -z "$PROTO_SIMPLE" ]; then
-      echo "Error: -proto <ProtocolName> is required for code generation" >&2
-      usage
-      exit 1
+  # Default mode selection:
+  #  - If any explicit -gt-* mode is chosen, use it.
+  #  - Else if -proto is provided (optionally with -roles/-out/-no-gc), run code generation for that protocol.
+  #  - Else default to checking the file via fidelity.
+  if [ -z "$GT_MODE" ]; then
+    if [ -n "$PROTO_SIMPLE" ]; then
+      GT_MODE="gen_efsms"
+    else
+      GT_MODE="check_fidelity"
     fi
-    MAIN_ARGS+=("-gt-generate-efsms" "$PROTO_SIMPLE")
-    ;;
-  *)
-    echo "Error: unknown GT_MODE=$GT_MODE" >&2
-    exit 1
-    ;;
-esac
+  fi
 
-# Append any additional CLI args intended for generation (roles/out/no-gc)
-if [ -n "$CLI_ARGS" ]; then
-  # shellcheck disable=SC2206
-  EXTRA_ARGS=($CLI_ARGS)
-  MAIN_ARGS+=("${EXTRA_ARGS[@]}")
+  # Build the Main invocation
+  MAIN_ARGS=()
+  MAIN_ARGS+=("$SCRFILE")
+
+  case "$GT_MODE" in
+    check_fidelity)
+      MAIN_ARGS+=("-gt-check-fidelity")
+      ;;
+    check_completeness)
+      MAIN_ARGS+=("-gt-check-completeness")
+      ;;
+    gen_efsms_all)
+      MAIN_ARGS+=("-gt-generate-efsms-all")
+      ;;
+    gen_efsms)
+      if [ -z "$PROTO_SIMPLE" ]; then
+        echo "Error: -proto <ProtocolName> is required for code generation" >&2
+        usage
+        exit 1
+      fi
+      MAIN_ARGS+=("-gt-generate-efsms" "$PROTO_SIMPLE")
+      ;;
+    *)
+      echo "Error: unknown GT_MODE=$GT_MODE" >&2
+      exit 1
+      ;;
+  esac
+
+  # Append any additional CLI args intended for generation (roles/out/no-gc)
+  if [ -n "$CLI_ARGS" ]; then
+    # shellcheck disable=SC2206
+    EXTRA_ARGS=($CLI_ARGS)
+    MAIN_ARGS+=("${EXTRA_ARGS[@]}")
+  fi
+
+  cd "$SCRIBHOME" || exit 1
+  sbt "runMain com.github.rhu1.gt.main.Main ${MAIN_ARGS[*]}"
 fi
-
-if [ "$verbose" = 1 ]; then
-  set -x
-fi
-
-cd "$SCRIBHOME" || exit 1
-sbt "runMain com.github.rhu1.gt.main.Main ${MAIN_ARGS[*]}"
