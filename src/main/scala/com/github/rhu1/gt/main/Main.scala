@@ -7,7 +7,6 @@ import com.github.rhu1.gt.`type`.session.local.*
 import org.scribble.ast.Module
 import org.scribble.core.`type`.name.{GProtoName, ModuleName}
 import org.scribble.ext.gt.cli.GTCommandLine2
-import org.scribble.ext.gt.codegen.erlang.{GTCallbackModule, GTGenericBehaviour, GTGenRoleGen, GTRoleGen}
 import org.scribble.ext.gt.core.model.efsm.{GTEFSM, GTVState}
 
 import java.io.File
@@ -35,18 +34,6 @@ object PrintEFSMAll extends CLArg {
     def unapply(x: CLArg): Boolean = x == this
 }
 
-object GenerateCallbackAll extends CLArg {
-    def unapply(x: CLArg): Boolean = x == this
-}
-
-object GenerateBehaviourAll extends CLArg {
-    def unapply(x: CLArg): Boolean = x == this
-}
-
-object GenerateAllModulesAll extends CLArg {
-    def unapply(x: CLArg): Boolean = x == this
-}
-
 // Code generation (Erlang runtime + role implementation)
 object GenerateErlangFSMsAll extends CLArg {
     def unapply(x: CLArg): Boolean = x == this
@@ -56,16 +43,11 @@ case class GenerateErlangFSMs(
     simple: GProtoName,
     roles: Seq[Role] = Seq.empty,
     outDir: String = "./generated",
-    emitGC: Boolean = false
+    emitGC: Boolean = true
 ) extends CLArg {}
 
 // simple name (not fully qualified); r is GT Role
 case class PrintEFSM(simple: GProtoName, r: Role) extends CLArg {}
-case class PrintRM(simple: GProtoName, r: Role) extends CLArg {}
-case class PrintCM(simple: GProtoName, r: Role) extends CLArg {}
-case class GenerateCallback(simple: GProtoName, r: Role) extends CLArg {}
-case class GenerateBehaviour(simple: GProtoName, r: Role) extends CLArg {}
-case class GenerateAllModules(simple: GProtoName, r: Role) extends CLArg {}
 
 
 object Main {
@@ -81,24 +63,19 @@ object Main {
             case "-gt-check-completeness" :: tail => cs(CheckCompleteness, parseArgs(tail))
             case "-gt-print-efsm-all" :: tail => cs(PrintEFSMAll, parseArgs(tail))
             case "-gt-print-efsm" :: n :: r :: tail => cs(PrintEFSM(new GProtoName(n), Role(r)), parseArgs(tail))
-            case "-gt-print-rm" :: n :: r :: tail => cs(PrintRM(new GProtoName(n), Role(r)), parseArgs(tail))
-            case "-gt-print-cm" :: n :: r :: tail => cs(PrintCM(new GProtoName(n), Role(r)), parseArgs(tail))
-            case "-gt-generate-callback-all" :: tail => cs(GenerateCallbackAll, parseArgs(tail))
-            case "-gt-generate-callback" :: n :: r :: tail => cs(GenerateCallback(new GProtoName(n), Role(r)), parseArgs(tail))
-            case "-gt-generate-behaviour-all" :: tail => cs(GenerateBehaviourAll, parseArgs(tail))
-            case "-gt-generate-behaviour" :: n :: r :: tail => cs(GenerateBehaviour(new GProtoName(n), Role(r)), parseArgs(tail))
-            case "-gt-generate-erlang-all" :: tail => cs(GenerateAllModulesAll, parseArgs(tail))
-            case "-gt-generate-erlang" :: n :: r :: tail => cs(GenerateAllModules(new GProtoName(n), Role(r)), parseArgs(tail))
 
-            // New: generate FSM-based Erlang modules (gen_role + role.erl + role.hrl)
-            case "-gt-generate-fsms-all" :: tail => cs(GenerateErlangFSMsAll, parseArgs(tail))
-            case "-gt-generate-fsms" :: n :: tail =>
-                // Parse optional flags: -roles ... -out DIR -gc
+            // Erlang EFSM-based generation
+            case "-gt-generate-efsms-all" :: tail => cs(GenerateErlangFSMsAll, parseArgs(tail))
+            case "-gt-generate-efsms" :: n :: tail =>
                 val (roles, outDir, emitGC, rest) = parseCodegenTail(Seq.empty, "./generated", true, tail)
                 cs(GenerateErlangFSMs(new GProtoName(n), roles.map(Role.apply), outDir, emitGC), parseArgs(rest))
 
             case "-gt-help" :: tail => cs(Help, parseArgs(tail))
             case "-h" :: tail => cs(Help, parseArgs(tail))
+
+            // Reject unknown GT flags early (prevents silently ignoring removed options)
+            case h :: _ if h.startsWith("-gt-") =>
+                throw new IllegalArgumentException(s"Unknown GT option: $h")
 
             case h :: t => cf(h, parseArgs(t))
         }
@@ -111,22 +88,22 @@ object Main {
         println(
             s"""
                |Usage:
-               |  sbt "runMain com.github.rhu1.gt.main.Main <path/to/file.scr> [GT options]"
+               |  sbt \"runMain com.github.rhu1.gt.main <path/to/file.scr> [GT options]\"
                |
-               |FSM-based Erlang generation:
-               |  -gt-generate-fsms <ProtoSimpleName> [-all | -roles R1 R2 ...] [-out DIR] [-gc]
-               |  -gt-generate-fsms-all
+               |Erlang EFSM-based generation:
+               |  -gt-generate-efsms <ProtoSimpleName> [-all | -roles R1 R2 ...] [-out DIR] [-no-gc]
+               |  -gt-generate-efsms-all
                |
                |Flags:
                |  -roles ...    Generate only for the listed roles (space-separated)
                |  -all          Generate for all roles (default if -roles is omitted)
                |  -out DIR      Output base directory (default: ./generated)
-               |  -gc           Enable idle GC support (gc_timeout/0, on_gc/2 hooks and runtime scheduling)
+               |  -no-gc        Disable idle GC support (enabled by default)
                |""".stripMargin
         )
     }
 
-    // Parse generator flags after -gt-generate-fsms <Proto>
+    // Parse generator flags after -gt-generate-efsms <Proto>
     private def parseCodegenTail(
         roles: Seq[String],
         outDir: String,
@@ -142,8 +119,8 @@ object Main {
             parseCodegenTail(Seq.empty, outDir, emitGC, tail)
         case "-out" :: dir :: tail =>
             parseCodegenTail(roles, dir, emitGC, tail)
-        case "-gc" :: tail =>
-            parseCodegenTail(roles, outDir, true, tail)
+        case "-no-gc" :: tail =>
+            parseCodegenTail(roles, outDir, false, tail)
         case "-proto" :: _ :: _ =>
             // -proto is handled at the top-level (selecting which protocol to generate)
             // so stop consuming flags here.
@@ -208,62 +185,6 @@ object Main {
                 (r, _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end).toGTEFSM)
             }))
         })
-
-        // Helper function to generate callback modules with access to translated protocols
-        def generateCallbackModule(n: GProtoName, r: Role, efsm: GTEFSM): Unit = {
-            try {
-                val protocolName = n.getLastElement
-                val javaRole = LType.convertRole(r)
-                val sigmaRoles = translated.get(n) match {
-                    case Some(gtype) => gtype.getLiveRoles.map(LType.convertRole).asJava
-                    case None => throw new RuntimeException(s"Could not find protocol $n")
-                }
-
-                val callbackModule = new GTCallbackModule()
-                callbackModule.generate(protocolName, javaRole, efsm, sigmaRoles)
-                println(s"\n[GT] Generated Callback Module for $n@$r in ./generated/$protocolName/")
-            } catch {
-                case e: java.io.IOException =>
-                    println(s"\n[GT] Error generating Callback Module for $n@$r: ${e.getMessage}")
-                case e: Exception =>
-                    println(s"\n[GT] Unexpected error generating Callback Module for $n@$r: ${e.getMessage}")
-            }
-        }
-
-        // Helper function to generate behaviour modules with access to translated protocols
-        def generateBehaviourModule(n: GProtoName, r: Role, efsm: GTEFSM): Unit = {
-            try {
-                val protocolName = n.getLastElement
-                val javaRole = LType.convertRole(r)
-                val gtype = translated.get(n) match {
-                    case Some(gtype) => gtype
-                    case None => throw new RuntimeException(s"Could not find protocol $n")
-                }
-                val sigmaRoles = gtype.getLiveRoles.map(LType.convertRole).asJava
-
-                // Convert role committing information to explicit committing format
-                val roleCommitting = gtype.getRoleCommitting.get(r) match {
-                    case Some(roleComMap) => roleComMap
-                    case None => Map.empty[Mid, Set[Op]]
-                }
-
-                val explicitCommiting: java.util.Map[Integer, java.util.Set[org.scribble.core.`type`.name.Op]] =
-                    roleCommitting.map { case (mid, ops) =>
-                        val javaOps = ops.map(op => new org.scribble.core.`type`.name.Op(op.toString)).asJava
-                        (mid.asInstanceOf[Integer], javaOps)
-                    }.asJava
-
-                val behaviourModule = new GTGenericBehaviour()
-                println("==============" + efsm)
-                behaviourModule.generateCode(protocolName, javaRole, efsm, explicitCommiting, sigmaRoles)
-                println(s"\n[GT] Generated Behaviour Module for $n@$r in ./generated/$protocolName/")
-            } catch {
-                case e: java.io.IOException =>
-                    println(s"\n[GT] Error generating Behaviour Module for $n@$r: ${e.getMessage}")
-                case e: Exception =>
-                    println(s"\n[GT] Unexpected error generating Behaviour Module for $n@$r: ${e.getMessage}")
-            }
-        }
 
         // Helper: generate the FSM-based Erlang modules (gen_role + role.erl + role.hrl)
         def generateFSMModules(
@@ -334,49 +255,15 @@ object Main {
             case PrintEFSM(simple, r) =>
                 val full = findFullName(simple)
                 printGTEFSM(full, r, efsms(full)(r))
-            case PrintRM(simple, r) =>
-                val full = findFullName(simple)
-                printRM(full, r, efsms(full)(r))
-            case PrintCM(simple, r) =>
-                val full = findFullName(simple)
-                printCM(full, r, efsms(full)(r))
-            case GenerateCallbackAll() =>
-                for ((n, rM) <- efsms) {
-                    for ((r, _M) <- rM) {
-                        generateCallbackModule(n, r, _M)
-                    }
-                }
-            case GenerateCallback(simple, r) =>
-                val full = findFullName(simple)
-                generateCallbackModule(full, r, efsms(full)(r))
-            case GenerateBehaviourAll() =>
-                for ((n, rM) <- efsms) {
-                    for ((r, _M) <- rM) {
-                        generateBehaviourModule(n, r, _M)
-                    }
-                }
-            case GenerateBehaviour(simple, r) =>
-                val full = findFullName(simple)
-                generateBehaviourModule(full, r, efsms(full)(r))
-            case GenerateAllModulesAll() =>
-                for ((n, rM) <- efsms) {
-                    for ((r, _M) <- rM) {
-                        generateCallbackModule(n, r, _M)
-                        generateBehaviourModule(n, r, _M)
-                    }
-                }
-            case GenerateAllModules(simple, r) =>
-                val full = findFullName(simple)
-                generateCallbackModule(full, r, efsms(full)(r))
-                generateBehaviourModule(full, r, efsms(full)(r))
 
-            // New: generate FSM-based Erlang modules (gen_role + role.erl + role.hrl)
+            // FSM-based Erlang generation
             case GenerateErlangFSMsAll() =>
+                // Backwards compatible default behaviour (GC enabled by default)
                 for ((n, rM) <- efsms) {
                     val protoSimple = n.getLastElement
                     val allRolesLower = translated(n).getLiveRoles.toSeq.map(_.toString.toLowerCase)
                     for ((r, _M) <- rM) {
-                        generateFSMModules(protoSimple, r, _M, allRolesLower, "./generated", emitGC = false)
+                        generateFSMModules(protoSimple, r, _M, allRolesLower, "./generated", emitGC = true)
                     }
                 }
 
@@ -397,25 +284,12 @@ object Main {
 
             case x => throw new RuntimeException(s"Unknown arg: $x")
         }
-
-        /*// Debug output for API gen
-        for ((n, rM) <- efsms) {
-            for ((r, _M) <- rM) {
-                val r1 = LType.convertRole(r)
-                println(s"\n[debug] Role gen:\n${new GTRoleGen().generate(n, r1, _M)}")
-                println(s"\n[debug] Gen role gen:\n${new GTGenRoleGen().generate(n, r1, _M)}")
-            }
-        }*/
     }
 
     private def printGTEFSM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
         println(s"\n[GT] Printing GTEFSM:\n\n$n@$r:\n${efsm.toDot}")
 
-    private def printRM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
-        println(s"\n[GT] Printing RM:\n\n$n@$r:\n${new GTGenRoleGen().generate(n, LType.convertRole(r), efsm)}")
-
-    private def printCM(n: GProtoName, r: Role, efsm: GTEFSM): Unit =
-        println(s"\n[GT] Printing CM:\n\n$n@$r:\n${new GTRoleGen().generate(n, LType.convertRole(r), efsm)}")
+    // Legacy RM/CM printing removed (obsolete CLI options deleted)
 
     private def toGSystem(G: GType): GSystem = GSystem(G.getRoleCommitting, G)
 

@@ -649,7 +649,6 @@ object RuntimeModuleGenerator {
       |-export_type([state_data/0]).
       |-type state_data() :: #state_data{}.
       |
-      |%% Behaviour callback contracts
       |${callbackDecls}
       |
       |%% ===== API =====
@@ -672,7 +671,6 @@ object RuntimeModuleGenerator {
       |init({CallbackModule, _Args}) ->
       |    io:format(\"${roleAtom}: Initializing with callback module ~p~n\", [CallbackModule]),
       |    put(callback_module, CallbackModule),
-      |    %% Init local commitments (stacked)
       |    ${if (emitGC) "set_commit(#{})," else "ok,"}
       |    CallbackModule:init([]).
       |

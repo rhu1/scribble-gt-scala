@@ -28,6 +28,7 @@ FROM eclipse-temurin:21-jdk-jammy AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG BAZELISK_VERSION=1.28.0
+ARG REBAR3_VERSION=3.19.0
 
 # Enable Ubuntu "universe" (often needed for nsis/elixir on minimal images)
 RUN apt-get update -y \
@@ -39,13 +40,18 @@ RUN apt-get update -y \
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends \
       curl gnupg git openssh-client \
-      rebar3 make python3 zip graphviz wget \
+      make python3 zip graphviz wget \
       elixir erlang-dev erlang-eunit erlang-common-test erlang-dialyzer \
       erlang-debugger erlang-parsetools erlang-runtime-tools erlang-os-mon erlang-ssl \
       nsis tofrodos mandoc bsdmainutils \
  && rm -rf /var/lib/apt/lists/*
 
-# Install sbt from the official repo (matches sbt site instructions)
+# Rebar3: install upstream escript (more stable across arch than some distro packages)
+RUN curl -fsSL -o /usr/local/bin/rebar3 \
+      "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+ && chmod +x /usr/local/bin/rebar3
+
+# Install sbt from the official repo
 RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/sources.list.d/sbt.list \
  && echo "deb https://repo.scala-sbt.org/scalasbt/debian /" > /etc/apt/sources.list.d/sbt_old.list \
  && curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" \
@@ -53,7 +59,6 @@ RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/so
  && apt-get update -y \
  && apt-get install -y --no-install-recommends sbt \
  && rm -rf /var/lib/apt/lists/*
-# (Those repo/key lines are straight from the sbt download page.) :contentReference[oaicite:1]{index=1}
 
 # Bazelisk (Bazel docs recommend Bazelisk on Ubuntu) :contentReference[oaicite:2]{index=2}
 RUN curl -fsSL -o /usr/local/bin/bazel \
@@ -85,14 +90,22 @@ RUN --mount=type=cache,target=/root/.ivy2 \
 FROM eclipse-temurin:21-jdk-jammy AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG REBAR3_VERSION=3.19.0
 
 # Minimal runtime deps for using generated Erlang demos inside the container
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends \
-      rebar3 make \
-      elixir erlang-runtime-tools erlang-os-mon erlang-ssl \
+      make bash nano less vim-tiny \
+      elixir \
+      erlang-dev erlang-eunit \
+      erlang-runtime-tools erlang-os-mon erlang-ssl \
       graphviz \
  && rm -rf /var/lib/apt/lists/*
+
+# Rebar3: install upstream escript
+RUN curl -fsSL -o /usr/local/bin/rebar3 \
+      "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+ && chmod +x /usr/local/bin/rebar3
 
 # sbt is needed at runtime because mMST.sh calls `sbt runMain ...`
 RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/sources.list.d/sbt.list \
@@ -105,5 +118,11 @@ RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/so
 
 WORKDIR /scribble-gt-scala
 COPY --from=build /scribble-gt-scala /scribble-gt-scala
+
+# Create an unprivileged user for artifact evaluation and ensure the workspace is writable.
+RUN useradd -m -u 1000 artifact \
+ && chown -R artifact:artifact /scribble-gt-scala
+
+USER artifact
 
 ENTRYPOINT ["/bin/bash"]

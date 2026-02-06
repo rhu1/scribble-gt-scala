@@ -2,9 +2,7 @@
 %%% @doc Fibonacci demo role: `a`.
 %%%
 %%% Role implementation module: this code implements the generated behaviour
-%%% `gen_a`. The generator provides the protocol-checked `gen_statem` wrapper
-%%% and message API; this module supplies the role logic.
-%%%
+%%% `gen_a`.
 %%% Protocol source: `examples/scribble/Fibonacci.scr`.
 %%%-------------------------------------------------------------------
 
