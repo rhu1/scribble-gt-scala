@@ -147,7 +147,7 @@ ARG ELIXIR_VERSION=v1.18.2
 
 # Runtime deps + build deps for RabbitMQ example builds
 RUN apt-get update -y \
- && apt-get install -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends p7zip-full\
       curl ca-certificates \
       git \
       make bash nano less vim-tiny \
@@ -155,6 +155,7 @@ RUN apt-get update -y \
       build-essential autoconf perl xsltproc \
       bison flex \
       graphviz \
+      rsync jq \
       libncurses5 \
       libncurses-dev \
       libtinfo-dev \

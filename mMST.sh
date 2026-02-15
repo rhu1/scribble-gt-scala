@@ -247,18 +247,24 @@ if [ "$run_scribble_examples" = 1 ]; then
     fi
     exit 0
 elif [ "$run_erlang_examples" = 1 ]; then
-     ERL_DIR="$SCRIBHOME/examples/erlang"
-     echo "Running, starting, and stopping OTP apps in: $ERL_DIR"
+      ERL_DIR="$SCRIBHOME/examples/erlang"
+      LOG_FILE="$SCRIBHOME/target/mMST_run_erlang_examples.log"
+      mkdir -p "$SCRIBHOME/target"
+
+      exec > >(tee "$LOG_FILE") 2>&1
+
+      echo "Running, starting, and stopping OTP apps in: $ERL_DIR"
+      echo "Log file: $LOG_FILE"
 
      PASS_APPS=()
      FAIL_APPS=()
      SKIP_APPS=()
 
-     # rabbitmq-server is special: it uses erlang.mk and requires GNU Make.
-     # Run the amqp_client EUnit tests (covers the replaced amqp_selective_consumer).
-     rmq_eunit_label="rabbitmq_server(amqp_client_eunit)"
-     rmq_eunit_ran_ok=0
-     if [ -d "$ERL_DIR/rabbitmq-server/deps/amqp_client" ]; then
+      # rabbitmq-server is special: it uses erlang.mk and requires GNU Make.
+      # Run the amqp_client EUnit tests (covers the replaced amqp_selective_consumer).
+      rmq_eunit_label="rabbitmq_server(amqp_client_eunit)"
+      rmq_eunit_ran_ok=0
+      if [ -d "$ERL_DIR/rabbitmq-server/deps/amqp_client" ]; then
          if command -v gmake >/dev/null 2>&1; then
              echo "---- rabbitmq-server: amqp_client eunit (selective consumer) ----"
             find "$ERL_DIR/rabbitmq-server/deps" -name '*.d' -delete 2>/dev/null || true
