@@ -1,7 +1,7 @@
 
 ---
 
-**OOPSLA 26 -- Paper #321 -- Artifact Overview**
+**Artifact Overview**
 
 # Mixed-Choice, Asynchronous Multiparty Session Types
 
@@ -16,12 +16,9 @@
 The artifact archive `paper321.zip` contains:
 
 - An **Overview** of the artifact (i.e., this document) in three formats:
-    - markdown: `paper321-overview.md` -- links clickable depending on markdown viewer app;
-    - pdf: `paper321-overview.pdf`.
-- The **main artifact** as a **Docker image**: `oopsla26-paper321-artifact.tar.gz`
-- The original submission version of our **paper**: `oopsla26-paper321.pdf`
+    - markdown: `README.md` -- links clickable depending on markdown viewer app;
 
-Following the Call for Artifacts, this Overview has the following sections:
+This Overview has the following sections:
 
 - [1. Introduction](#INTRO)
 - [2. Hardware dependencies](#HARDWARE)
