@@ -74,50 +74,6 @@ The programmer can complete the program as follows.
             roles know how to communicate with each other (the connection function generated in `<role>.erl` can be used for that.
         -   Providing supervision of these processes for fault-tolerance.
 
-
----
-
-## 1.3. <a name="CLAIMS"></a> Claims
-
-
-The main statement in the submitted paper: 
-> l.1067 **<em>We will submit our implementation, examples and RabbitMQ case study as an artifact.</em>**
-
-Our Docker image supports these claims by providing these materials:
-
-- The source code of:
-  - Our Scribble-based tool for validating protocols and generating Erlang
-    `gen_statem` code.
-  - All the example protocols from Table 1 along with their pre-generated (and
-    minimally implemented) Erlang code.
-  - rabbitmq-server with a replaced amqp_selective_consumer module following our framework.
-- Scripts and a preconfigured Erlang/OTP environment with `rebar3` (the
-  official Erlang build tool) for building and running all of the above.
-
-### 1.3.1. Evaluation checklist (claim-by-claim)
-
-This subsection is intended as a **reviewer checklist** mapping the paper's central artifact-backed claims to concrete commands and outputs.
-All commands are expected to be run **inside the Docker container** from the `scribble-gt-scala/` directory.
-
-| Claim | What to run | Expected result | Output location |
-|---|---|---|---|
-| Tool validates Scribble protocols and generates per-role `gen_statem` wrappers | `./mMST.sh -run-scribble-examples` | Exit status 0. Generated code produced for each `.scr` file. | `generated/<ProtocolName>/` |
-| Table 1 example OTP apps compile and can be started/stopped | `./mMST.sh -run-erlang-examples` | Summary printed with `PASS (...)`, `FAIL (...)`, `SKIP (...)`. | Console summary + `target/mMST_run_erlang_examples.log` |
-| RabbitMQ selective consumer replacement is tested | `./mMST.sh -run-erlang-examples` | `rabbitmq_server(amqp_client_eunit)` appears in PASS (or SKIP if GNU Make is unavailable). | `target/rmq_eunit.log`, `target/amqp_client_eunit.log` |
-
-If any app fails, consult the corresponding log under `target/`.
-
-
----
----
-
-# 2. <a name="HARDWARE"></a> Hardware dependencies
-
-Our artifact has no specific hardware requirements.
-
-
----
-
 ---
 
 # 3. <a name="START"></a> Getting started guide
@@ -129,17 +85,6 @@ Our artifact has no specific hardware requirements.
 
 - Docker is installed and running – e.g., see this
   [tutorial](https://docs.docker.com/get-started/).
-- **Docker Buildx** is recommended for multi-platform builds. (It is included with Docker Desktop and modern Docker Engine installs.)
-
-
-Notes on the artifact.
-
-- This docker image has been tested on following environment as the host machine:
-  - MacOS 14.7.1, on a MacBook Pro with 1.4 GHz Quad-Core Intel Core i5 and 16GB RAM.
-  - MacOS 15.3.1, on a MacBook Pro with M1 and 16GB RAM.
-  - MacOS 15.5, on a MacBook Pro with M4 and 16GB RAM.
-  - Windows 10, Intel Core i5 @ 2.6 GHz (4 cores) and 16GB RAM.
-
 <!--
 - The artifact Docker image has `vim` and `nano` preinstalled.
 -->
@@ -180,17 +125,6 @@ Notes on the artifact.
     ```
     **Expected output**.
     The script will iterate through each Erlang/OTP application located in `examples/erlang/`, executing them individually. It will display the output of each application on the console, including logs of the state machines(`*DBG*`). It should complete without errors.
-
-    **Log file (for debugging / artifact evaluation).**
-    This command also writes a full transcript to:
-    ```
-    target/mMST_run_erlang_examples.log
-    ```
-    You can inspect it inside the container using:
-    ```sh
-    tail -n 80 target/mMST_run_erlang_examples.log
-    less target/mMST_run_erlang_examples.log
-    ```
 
     Notes:
     - The container runs as an unprivileged user and the workspace is writable, so `target/` log files can be created.
