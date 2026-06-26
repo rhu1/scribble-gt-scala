@@ -1,5 +1,61 @@
 module Test;
 
+//*
+global protocol Proto1(role p0, role q0, role q1) {
+    choice at p0 {
+        m0() from p0 to q0;
+        m() from p0 to q1;
+    } or {
+        m1() from p0 to q0;
+        m() from p0 to q1;
+    }
+}
+//*/
+/*
+global protocol Proto1(role p0, role q0, role q1, role p2, role q2) {
+    choice at p0 {
+        m0() from p0 to q0;
+        m() from p0 to q1;
+        choice at p2 {
+            m0() from p2 to q2;
+            m0() from p0 to q1;
+        } or {
+            m1() from p2 to q2;
+            m1() from p0 to q1;
+        }
+    } or {
+        m1() from p0 to q0;
+        m() from p0 to q1;
+        choice at p2 {
+            m0() from p2 to q2;
+            m0() from p0 to q1;
+        } or {
+            m1() from p2 to q2;
+            m1() from p0 to q1;
+        }
+    }
+}
+//*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* // Testing step
 global protocol Proto1(role A, role B) {
@@ -232,7 +288,7 @@ global protocol Proto1(role A, role B) {
 }
 //*/
 
-//* // Testing runtime projection/merge, sim
+/* // Testing runtime projection/merge, sim
 global protocol Proto1(role A, role B, role C) {
     mixed {
         a1() from A to B;
@@ -244,6 +300,68 @@ global protocol Proto1(role A, role B, role C) {
     } or A->B {
         TOa() from B to A;
         TOc() from B to C;
+    }
+}
+//*/
+
+
+
+/*global protocol Proto1(role Alice, role Bob, role Seller){
+  mixed{
+      request_title() from Alice to Seller;
+      price_quote() from Seller to Alice;
+      price_quote() from Seller to Bob;
+      contribution() from Alice to Bob;
+      mixed{
+          choice at Bob{
+              accept_quote() from Bob to Seller;
+              purchase_confirmed() from Seller to Bob;
+              purchase_notification() from Bob to Alice;
+          } or {
+                reject_quote() from Bob to Seller;
+                cancel_confirmation() from Seller to Bob;
+                cancel_notification() from Bob to Alice;
+          }
+          } or Bob -> Seller {
+              response_timeout() from Seller to Bob;
+              response_timeout() from Seller to Alice;
+          }
+  } or Alice -> Seller {
+      not_available() from Seller to Alice;
+      //not_available() from Seller to Bob;
+      forward_not_available() from Alice to Bob;
+  }
+
+}
+//*/
+
+/*
+data <erlang> "string" from "" as title;
+data <erlang> "integer" from "" as price;
+data <erlang> "integer" from "" as amount;
+global protocol DiffTwoBuyer(role Alice, role Bob, role Seller) {
+    mixed {
+        request_title(title) from Alice to Seller;
+        price_quote(price) from Seller to Alice;
+        price_quote(price) from Seller to Bob;
+        contribution(amount) from Alice to Bob;
+        mixed {
+            choice at Bob {
+                accept_quote() from Bob to Seller;
+                purchase_confirmed() from Seller to Bob;
+                purchase_notification() from Bob to Alice;
+            } or {
+                reject_quote() from Bob to Seller;
+                cancel_confirmation() from Seller to Bob;
+                cancel_notification() from Bob to Alice;
+            }
+        } or Bob->Seller {
+            response_timeout() from Seller to Bob;
+            response_timeout() from Seller to Alice;
+        }
+    } or Alice->Seller {
+        not_available() from Seller to Alice;
+        forward_not_available() from Alice to Bob;
     }
 }
 //*/

@@ -48,10 +48,11 @@ object LType {
     /* ... */
 
     def merge(x: LType, y: LType): Option[LType] =
-        if (x == y) {
-            Some(x)
-        } else {
+        /*if (x == y) {
+            Some(x)  // !!! no "indifferent"
+        } else*/ {
             (x, y) match {
+                case (LEnd, LEnd) => Some(x)
                 case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
                     if (src1 == src2
                             && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // HERE TODO relax, check intersect identity
