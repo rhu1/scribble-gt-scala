@@ -1,4 +1,4 @@
-module Intro;
+module Interrupt;
 
 
 //* // Sec. 1 l.62 (𝐴 → 𝐵 :𝑎1 . 𝐵 → 𝐶 :𝑎2 . ...) + (𝐵 → 𝐴 :𝑎3 . 𝐵 → 𝐶 :𝑎4 . ...)
