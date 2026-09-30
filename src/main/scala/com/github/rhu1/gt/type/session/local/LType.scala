@@ -565,7 +565,6 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
                            c: Mid, s: GTVState, end: GTVState): EFSM =
         val recvars = s.recvars.asScala + LType.convertRecVar(this.rvar)  // !!! GTVState Java unmodifiable
         val s1 = new GTVState(s.isEntry, c, recvars.asJava)
-        //EFSM(mutable.LinkedHashSet(s1), s1, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
         this.body.construct(r, com, recvStars, c, s1, end)
 
     /* ... */

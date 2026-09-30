@@ -1,6 +1,6 @@
 module Test;
 
-/*
+//*
 global protocol Timeout(role A, role B, role C) {
     mixed { // "Left-hand" side (LHS)
         a1() from A to B;
@@ -15,7 +15,7 @@ global protocol Timeout(role A, role B, role C) {
 }
 //*/
 
-//*
+/*
 global protocol Fibonacci(role a, role b){
 	rec fib	{
 	    mixed{
