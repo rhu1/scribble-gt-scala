@@ -55,7 +55,7 @@ object LType {
                 case (LEnd, LEnd) => Some(x)
                 case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
                     if (src1 == src2
-                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // HERE TODO relax, check intersect identity
+                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // !!! equality of non-empty intersect insufficient, e.g., 4th party branching inside a 3rd party identity-merge
                         Some(LBranch(src1, cases1 ++ cases2))
                     } else {
                         None
@@ -565,7 +565,8 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
                            c: Mid, s: GTVState, end: GTVState): EFSM =
         val recvars = s.recvars.asScala + LType.convertRecVar(this.rvar)  // !!! GTVState Java unmodifiable
         val s1 = new GTVState(s.isEntry, c, recvars.asJava)
-        EFSM(mutable.LinkedHashSet(s1), s1, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
+        //EFSM(mutable.LinkedHashSet(s1), s1, mutable.LinkedHashSet.empty, mutable.LinkedHashSet.empty, mutable.LinkedHashMap.empty)
+        this.body.construct(r, com, recvStars, c, s1, end)
 
     /* ... */
 
