@@ -182,7 +182,7 @@ object Main {
                 GTVState.resetCounter()
                 val s_init = new GTVState(GTVState.TOP_SCOPE)
                 val end = new GTVState(GTVState.TOP_SCOPE)
-                (r, _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end).toGTEFSM)
+                (r, _L.construct(r, rcom(r), Map.empty, GTVState.TOP_SCOPE, s_init, end).toGTEFSM.fix)
             }))
         })
 

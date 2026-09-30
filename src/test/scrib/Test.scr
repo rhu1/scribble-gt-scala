@@ -1,6 +1,50 @@
 module Test;
 
+/*
+global protocol Timeout(role A, role B, role C) {
+    mixed { // "Left-hand" side (LHS)
+        a1() from A to B;
+        a2() from A to C;
+        a3() from B to C;
+        a4() from B to A;
+        a5() from C to A;
+    } or A -> B { // "Right-hand" side (RHS)
+        TOa() from B to A;
+        TOb() from B to C;
+    }
+}
+//*/
+
 //*
+global protocol Fibonacci(role a, role b){
+	rec fib	{
+	    mixed{
+            choice at a {
+                fibonacci1() from a to b;
+                fibonacci2() from b to a;
+                continue fib;
+            } or {
+                stop() from a to b;
+                ack() from b to a; // otherwise Not left-committing (clear-termination)
+            }
+		} or a->b {
+		    error() from b to a;
+		}
+	}
+}
+//*/
+
+/*
+global protocol Proto1(role A, role B) {
+    rec X {
+    1() from A to B;
+    2() from B to A;
+    continue X;
+    }
+}
+//*/
+
+/*
 global protocol Proto1(role p0, role q0, role q1) {
     choice at p0 {
         m0() from p0 to q0;

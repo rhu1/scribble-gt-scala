@@ -55,7 +55,7 @@ object LType {
                 case (LEnd, LEnd) => Some(x)
                 case (LBranch(src1, cases1), LBranch(src2, cases2)) =>
                     if (src1 == src2
-                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // HERE TODO relax, check intersect identity
+                            && cases1.keySet.intersect(cases2.keySet).isEmpty) {  // !!! equality of non-empty intersect insufficient, e.g., 4th party branching inside a 3rd party identity-merge
                         Some(LBranch(src1, cases1 ++ cases2))
                     } else {
                         None
@@ -658,4 +658,3 @@ case class EFSM(
         val delta = this.delta.map { case ((s, e), v) => (new Pair(s, e), v.map((a, s1) => new Pair(a, s1)).asJava) }.asJava
         new GTEFSM(S, this.init, E, A, delta)
 }
-
