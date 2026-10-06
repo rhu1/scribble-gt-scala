@@ -210,10 +210,8 @@ object Main {
         def writeHrl(outDir: File, roleAtom: String, rolesLower: Seq[String]): Unit = {
             val hrlPath = outDir.toPath.resolve(s"${roleAtom}.hrl")
             val peerRoles = rolesLower.filterNot(_ == roleAtom)
-            val mcPathField = "mc_path = [] :: [atom()]"
             val peerFields = if (peerRoles.nonEmpty) peerRoles.map(r => s"${r}_pid :: pid() | undefined").mkString(", ") else ""
-            val allFields = List(Some(mcPathField), if (peerFields.nonEmpty) Some(peerFields) else None).flatten.mkString(", ")
-            val record = s"-record(state_data, {${allFields}})."
+            val record = s"-record(state_data, {${peerFields}})."
             val content =
                 s"""
                    |-ifndef(${roleAtom.toUpperCase}_HRL).

@@ -25,7 +25,6 @@
 	]).
 
 -include("bob.hrl").
-%% state_data record is defined in bob.hrl (mc_path + peer pids).
 -type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.

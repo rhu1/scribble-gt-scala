@@ -1,0 +1,27 @@
+.git
+.cache
+.config
+.hex
+.idea
+.mix
+.vscode
+target
+generated
+**/_build
+**/ebin
+**/*.beam
+**/*.d
+**/.DS_Store
+/oopsla2425-paper672-artifact.tar.gz
+
+# Local run/build state that must not leak into the image
+examples/erlang/*/rebar.lock
+**/*_debug.log
+**/erl_crash.dump
+**/rebar3.crashdump
+**/.erlang.mk/*.last-testdir-build
+.github
+
+# Release outputs
+dist
+*.tar.gz

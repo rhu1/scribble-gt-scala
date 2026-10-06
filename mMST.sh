@@ -31,7 +31,7 @@ usage() {
 
   Extras:
    -run-scribble-examples    Run generation for all .scr files under examples/scribble/
-   -run-erlang-examples      Compile, start, and stop all Erlang OTP app examples
+   -run-erlang-examples      Compile, run EUnit, start, and stop all Erlang OTP app examples
    -quiet-erlang-examples    With -run-erlang-examples, suppress per-app output (summary only)
    -clean-erlang-examples    Clean only Erlang OTP app examples
   -clean-all                sbt clean, remove ./generated, and rebar3 clean on examples
@@ -239,11 +239,14 @@ if [ "$run_scribble_examples" = 1 ]; then
     if [ -z "$(find "$EXAMPLES_DIR" -type f -name '*.scr' -print -quit)" ]; then
         echo "No .scr examples found in $EXAMPLES_DIR"
     else
-        find "$EXAMPLES_DIR" -type f -name '*.scr' | while IFS= read -r scr_file; do
+        batch_status=0
+        while IFS= read -r -d '' scr_file; do
             echo "Processing example: $scr_file"
-            # validate + project + generate for all protocols in the file
-            scribblec "$scr_file" -gt-generate-efsms-all $CLI_ARGS
-        done
+            if ! scribblec "$scr_file" -gt-generate-efsms-all $CLI_ARGS; then
+                batch_status=1
+            fi
+        done < <(find "$EXAMPLES_DIR" -type f -name '*.scr' -print0)
+        exit "$batch_status"
     fi
     exit 0
 elif [ "$run_erlang_examples" = 1 ]; then
@@ -263,16 +266,17 @@ elif [ "$run_erlang_examples" = 1 ]; then
       # rabbitmq-server is special: it uses erlang.mk and requires GNU Make.
       # Run the amqp_client EUnit tests (covers the replaced amqp_selective_consumer).
       rmq_eunit_label="rabbitmq_server(amqp_client_eunit)"
-      rmq_eunit_ran_ok=0
       if [ -d "$ERL_DIR/rabbitmq-server/deps/amqp_client" ]; then
          if command -v gmake >/dev/null 2>&1; then
              echo "---- rabbitmq-server: amqp_client eunit (selective consumer) ----"
-            find "$ERL_DIR/rabbitmq-server/deps" -name '*.d' -delete 2>/dev/null || true
+             find "$ERL_DIR/rabbitmq-server/deps" -name '*.d' -delete 2>/dev/null || true
+             # erlang.mk skips recompiling test/*.erl while this marker exists, even when
+             # the test .beam files are missing (e.g. in a fresh copy or the Docker image).
+             rm -f "$ERL_DIR/rabbitmq-server/.erlang.mk/amqp_client.last-testdir-build"
              export SCRIBBLE_GT_OTP_APP_HOME="$ERL_DIR/rabbitmq-server"
              if (cd "$ERL_DIR/rabbitmq-server/deps/amqp_client" && gmake -j1 eunit); then
                  echo "EUNIT OK: rabbitmq-server/amqp_client"
                  PASS_APPS+=("$rmq_eunit_label")
-                 rmq_eunit_ran_ok=1
              else
                  echo "EUNIT FAIL: rabbitmq-server/amqp_client"
                  FAIL_APPS+=("$rmq_eunit_label")
@@ -287,35 +291,26 @@ elif [ "$run_erlang_examples" = 1 ]; then
         [ -d "$dir" ] || continue
         app=$(basename "$dir")
 
-        # Skip folders without a rebar3.config (not an OTP app)
-        if [ ! -f "$dir/rebar3.config" ]; then
-            # If we've already run the rabbitmq selective-consumer unit tests successfully,
-            # suppress the rabbitmq-server SKIP line to avoid confusing output.
-            if [ "$app" = "rabbitmq-server" ] && [ "$rmq_eunit_ran_ok" = 1 ]; then
-                :
-            else
-                echo "SKIP $app (missing rebar3.config)"
-            fi
-            # If we've already run the rabbitmq selective-consumer unit tests successfully,
-            # don't also list rabbitmq-server as skipped.
-            if [ "$app" = "rabbitmq-server" ] && [ "$rmq_eunit_ran_ok" = 1 ]; then
-                 :
-             else
-                 SKIP_APPS+=("$app")
-             fi
-             continue
-         fi
+        if [ "$app" = "rabbitmq-server" ]; then
+            continue
+        fi
+
+        if [ ! -f "$dir/rebar.config" ]; then
+            echo "SKIP $app (missing rebar.config)"
+            SKIP_APPS+=("$app")
+            continue
+        fi
 
         echo "Building: $app"
         if [ "$quiet_erlang_examples" = 1 ]; then
-           if (cd "$dir" && rebar3 compile ${verbose:+-v} >/dev/null); then
+           if (cd "$dir" && rebar3 compile >/dev/null); then
                echo "COMPILE OK: $app"
            else
                echo "COMPILE FAIL: $app"
                FAIL_APPS+=("$app")
                continue
            fi
-       elif (cd "$dir" && echo "---- rebar3 compile ($app) ----" && rebar3 compile ${verbose:+-v}); then
+       elif (cd "$dir" && echo "---- rebar3 compile ($app) ----" && rebar3 compile); then
             echo "COMPILE OK: $app"
         else
             echo "COMPILE FAIL: $app"
@@ -323,25 +318,42 @@ elif [ "$run_erlang_examples" = 1 ]; then
             continue
         fi
 
-
-        appname="$app"
-        if [ -d "$dir/_build/default/lib" ]; then
-            found_app=$(find "$dir/_build/default/lib" -maxdepth 2 -type f -name '*.app' 2>/dev/null | head -n 1)
-            if [ -n "$found_app" ]; then
-                appname=$(basename "$found_app" .app)
+        echo "Testing: $app"
+        if [ "$quiet_erlang_examples" = 1 ]; then
+            if (cd "$dir" && rebar3 eunit >/dev/null); then
+                echo "EUNIT OK: $app"
+            else
+                echo "EUNIT FAIL: $app"
+                FAIL_APPS+=("$app")
+                continue
             fi
+        elif (cd "$dir" && echo "---- rebar3 eunit ($app) ----" && rebar3 eunit); then
+            echo "EUNIT OK: $app"
+        else
+            echo "EUNIT FAIL: $app"
+            FAIL_APPS+=("$app")
+            continue
+        fi
+
+
+        # The OTP application name comes from src/<name>.app.src and can differ from
+        # the directory name (the interleave_* examples are all `interleaving`).
+        appname="$app"
+        app_src=$(find "$dir/src" -maxdepth 1 -type f -name '*.app.src' 2>/dev/null | head -n 1)
+        if [ -n "$app_src" ]; then
+            appname=$(basename "$app_src" .app.src)
         fi
 
         echo "Running (start/stop): $appname"
         if [ "$quiet_erlang_examples" = 1 ]; then
-           if (cd "$dir" && rebar3 shell --eval "application:ensure_all_started($appname), timer:sleep(2000), application:stop($appname), halt()." >/dev/null); then
+           if (cd "$dir" && rebar3 shell --eval "case application:ensure_all_started($appname) of {ok, _} -> timer:sleep(2000), application:stop($appname), halt(0); StartError -> io:format(\"~nFailed to start $appname: ~p~n\", [StartError]), halt(1) end." >/dev/null); then
                echo "RUN OK: $app"
                PASS_APPS+=("$app")
            else
                echo "RUN FAIL: $app"
                FAIL_APPS+=("$app")
            fi
-        elif (cd "$dir" && echo "---- rebar3 shell ($appname) ----" && rebar3 shell --eval "application:ensure_all_started($appname), timer:sleep(2000), application:stop($appname), halt()."); then
+        elif (cd "$dir" && echo "---- rebar3 shell ($appname) ----" && rebar3 shell --eval "case application:ensure_all_started($appname) of {ok, _} -> timer:sleep(2000), application:stop($appname), halt(0); StartError -> io:format(\"~nFailed to start $appname: ~p~n\", [StartError]), halt(1) end."); then
             echo "RUN OK: $app"
             PASS_APPS+=("$app")
         else
@@ -384,4 +396,3 @@ elif [ "$run_erlang_examples" = 1 ]; then
         esac
     fi
 fi
-

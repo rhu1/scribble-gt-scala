@@ -3,10 +3,10 @@ FROM eclipse-temurin:21-jdk-jammy AS src
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Default: build from upstream (override USE_GIT_CLONE=0 to use local build context)
+# Build the checked-out source by default. Set USE_GIT_CLONE=1 for a remote ref.
 ARG REPO_URL=https://github.com/rhu1/scribble-gt-scala.git
-ARG GIT_REF=gen
-ARG USE_GIT_CLONE=1
+ARG GIT_REF=artifact
+ARG USE_GIT_CLONE=0
 
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends git ca-certificates \
@@ -72,6 +72,12 @@ RUN apt-get update -y \
  && rm -rf /var/lib/apt/lists/* \
  && if ! command -v gmake >/dev/null 2>&1; then ln -s "$(command -v make)" /usr/local/bin/gmake; fi
 
+# Docker Desktop on Apple Silicon builds the amd64 image under emulation, where the
+# BEAM JIT's default dual-mapped code memory can make Erlang crash at random (seen
+# while compiling Elixir). Single-mapped JIT memory is the usual workaround. It is
+# set only in this build stage, not in the final image.
+ENV ERL_FLAGS="+JMsingle true"
+
 # Install Erlang/OTP from official source tarball (avoid Erlang Solutions repo flakiness)
 RUN set -eux; \
     curl -fL --retry 5 --retry-delay 2 \
@@ -131,23 +137,27 @@ RUN set -eux; \
 WORKDIR /scribble-gt-scala
 COPY --from=src /scribble-gt-scala /scribble-gt-scala
 
-# Cache sbt deps between builds
 RUN --mount=type=cache,target=/root/.ivy2 \
     --mount=type=cache,target=/root/.sbt \
     --mount=type=cache,target=/root/.cache/coursier \
-    sbt -batch -Dsbt.supershell=false update
+    sbt -batch -Dsbt.supershell=false compile \
+ && mkdir -p /opt/sbt-home/.cache \
+ && cp -a /root/.ivy2 /opt/sbt-home/.ivy2 \
+ && cp -a /root/.sbt /opt/sbt-home/.sbt \
+ && cp -a /root/.cache/sbt /opt/sbt-home/.cache/sbt \
+ && cp -a /root/.cache/coursier /opt/sbt-home/.cache/coursier
 
 
 FROM eclipse-temurin:21-jdk-jammy AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG REBAR3_VSN=3.23.0
+ARG REBAR3_VSN=3.24.0
 ARG OTP_VERSION=27.2.1
 ARG ELIXIR_VERSION=v1.18.2
 
 # Runtime deps + build deps for RabbitMQ example builds
 RUN apt-get update -y \
- && apt-get install -y --no-install-recommends p7zip-full\
+ && apt-get install -y --no-install-recommends p7zip-full \
       curl ca-certificates \
       git \
       make bash nano less vim-tiny \
@@ -188,6 +198,10 @@ RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/so
 
 WORKDIR /scribble-gt-scala
 COPY --from=build /scribble-gt-scala /scribble-gt-scala
+COPY --from=build /opt/sbt-home/.ivy2 /scribble-gt-scala/.ivy2
+COPY --from=build /opt/sbt-home/.sbt /scribble-gt-scala/.sbt
+COPY --from=build /opt/sbt-home/.cache/sbt /scribble-gt-scala/.cache/sbt
+COPY --from=build /opt/sbt-home/.cache/coursier /scribble-gt-scala/.cache/coursier
 
 # Create an unprivileged user and make workspace writable
 RUN useradd -m -u 1000 artifact \

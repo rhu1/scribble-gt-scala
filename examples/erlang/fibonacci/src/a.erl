@@ -42,23 +42,24 @@ callback_mode() ->
 %% ===== gen_<role> behaviour =====
 
 -spec init(list()) ->
-    {ok, s5, state_data()} | {ok, s5, state_data(), [{next_event, internal, {fibonacci}}] }.
+    {ok, s5, state_data()} | {ok, s5, state_data(), [{next_event, internal, {fibonacci_1}}] }.
 init([]) ->
     put(prev_value, 0),
     put(curr_value, 1),
     put(iter, 0),
+    put(limit, application:get_env(fibonacci, limit, 10)),
 
     Data = #state_data{b_pid = undefined},
     io:format("a initialized~n", []),
 
     %% Kick off the protocol
-    {ok, s5, Data, [{next_event, internal, {fibonacci}}]}.
+    {ok, s5, Data, [{next_event, internal, {fibonacci_1}}]}.
 
 %% ---------- State functions (state_functions mode) ----------
 
 %% Mixed-choice entry state
 
--spec s5(internal | cast, {fibonacci} | {stop} | {pid(), {error}}, state_data()) ->
+-spec s5(internal | cast, {fibonacci_1} | {stop} | {pid(), {error}}, state_data()) ->
     {next_state, s6, state_data()} |
     {next_state, s9, state_data()} |
     {keep_state, state_data()} |
@@ -68,13 +69,12 @@ s5(cast, {BPid, {error}}, #state_data{b_pid = BPid} = Data) ->
     io:format("A: s5 Received error from B~n", []),
     {stop, normal, Data};
 
-s5(internal, {fibonacci}, Data0) ->
+s5(internal, {fibonacci_1}, Data0) ->
     Data = connect(Data0),
     BPid = Data#state_data.b_pid,
     Curr = case get(curr_value) of undefined -> 1; V1 -> V1 end,
-    io:format("A: s5 Sending fibonacci ~p to B~n", [Curr]),
-    %% Use generated wrapper/API (this sends {fibonacci,{Num}} with the correct Path).
-    gen_a:send_s5_fibonacci(BPid, Curr, Data),
+    io:format("A: s5 Sending fibonacci_1 ~p to B~n", [Curr]),
+    gen_a:send_s5_fibonacci_1(BPid, Curr, Data),
     {next_state, s6, Data};
 
 s5(internal, {stop}, Data0) ->
@@ -84,12 +84,16 @@ s5(internal, {stop}, Data0) ->
     gen_a:send_s5_stop(BPid, Data),
     {next_state, s9, Data}.
 
--spec s6(cast, {pid(), {fibonacci, term()}}, state_data()) ->
-    {next_state, s5, state_data(), [{next_event, internal, {fibonacci}}]} |
+-spec s6(cast, {pid(), {error}} | {pid(), {fibonacci_2, {term()}}}, state_data()) ->
+    {next_state, s5, state_data(), [{next_event, internal, {fibonacci_1}}]} |
     {next_state, s5, state_data(), [{next_event, internal, {stop}}]} |
     {stop, normal, state_data()}.
 
-s6(cast, {BPid, {fibonacci, {Num}}}, #state_data{b_pid = BPid} = Data) when is_integer(Num) ->
+s6(cast, {BPid, {error}}, #state_data{b_pid = BPid} = Data) ->
+  io:format("A: s6 Received error from B~n", []),
+  {stop, normal, Data};
+
+s6(cast, {BPid, {fibonacci_2, {Num}}}, #state_data{b_pid = BPid} = Data) when is_integer(Num) ->
   Prev = case get(prev_value) of undefined -> 0; V2 -> V2 end,
   Curr = case get(curr_value) of undefined -> 1; V3 -> V3 end,
   Next = Prev + Curr,
@@ -100,12 +104,13 @@ s6(cast, {BPid, {fibonacci, {Num}}}, #state_data{b_pid = BPid} = Data) when is_i
   Iter0 = case get(iter) of undefined -> 0; V4 -> V4 end,
   Iter = Iter0 + 1,
   put(iter, Iter),
+  Limit = case get(limit) of undefined -> 10; V5 -> V5 end,
 
-  io:format("A: s6 Received ~p from B, next is ~p (iter=~p)~n", [Num, Next, Iter]),
+  io:format("A: s6 Received fibonacci_2 ~p from B, next is ~p (iter=~p)~n", [Num, Next, Iter]),
 
   %% Deterministic stop after N iterations (keep it in sync with examples/erlang/fibonacci)
-  case Iter < 10 of
-    true  -> {next_state, s5, Data, [{next_event, internal, {fibonacci}}]};
+  case Iter < Limit of
+    true  -> {next_state, s5, Data, [{next_event, internal, {fibonacci_1}}]};
     false -> {next_state, s5, Data, [{next_event, internal, {stop}}]}
   end.
 

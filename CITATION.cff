@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite the paper and, where appropriate,
+  this artifact.
+title: Mixed Choice in Asynchronous Multiparty Session Types Artifact
+type: software
+version: v2
+date-released: "2026-10-06"
+license: CC-BY-4.0
+repository-code: https://github.com/rhu1/scribble-gt-scala
+keywords:
+  - mixed choice
+  - asynchronous multiparty session types
+  - type systems
+  - Scribble
+  - Erlang
+authors:
+  - family-names: Bocchi
+    given-names: Laura
+    affiliation: University of Kent
+    orcid: https://orcid.org/0000-0002-7177-9395
+  - family-names: Hu
+    given-names: Raymond
+    affiliation: Queen Mary, University of London
+    orcid: https://orcid.org/0000-0003-4361-6772
+  - family-names: Voinea
+    given-names: Adriana Laura
+    affiliation: University of Glasgow
+    orcid: https://orcid.org/0000-0003-4482-205X
+  - family-names: Thompson
+    given-names: Simon
+    affiliation: University of Kent
+    orcid: https://orcid.org/0000-0002-2350-301X
+preferred-citation:
+  type: article
+  title: Mixed Choice in Asynchronous Multiparty Session Types
+  authors:
+    - family-names: Bocchi
+      given-names: Laura
+    - family-names: Hu
+      given-names: Raymond
+    - family-names: Voinea
+      given-names: Adriana Laura
+    - family-names: Thompson
+      given-names: Simon
+  journal: Proceedings of the ACM on Programming Languages
+  volume: 10
+  issue: OOPSLA
+  year: 2026
+  doi: 10.1145/3798256

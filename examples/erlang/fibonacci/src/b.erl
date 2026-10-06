@@ -35,6 +35,7 @@ init([]) ->
   %% Fibonacci state (kept outside the generated record)
   put(prev_value, 0),
   put(curr_value, 0),
+  put(mode, application:get_env(fibonacci, mode, normal)),
 
   Data = #state_data{a_pid = APid},
   io:format("b initialized~n", []),
@@ -43,7 +44,7 @@ init([]) ->
 
 %% ===== States =====
 
--spec s5(internal | cast, {error} | {pid(), {fibonacci, term()}} | {pid(), {stop}}, state_data()) ->
+-spec s5(internal | cast, {error} | {pid(), {fibonacci_1, {term()}}} | {pid(), {stop}}, state_data()) ->
   {keep_state, state_data()} |
   {next_state, s6, state_data()} |
   {next_state, s9, state_data()} |
@@ -57,24 +58,28 @@ s5(cast, {APid, {stop}}, #state_data{a_pid = APid} = Data) ->
   io:format("B: s5 Received stop from A, will ack and stop~n", []),
   {next_state, s9, Data, [{next_event, internal, {ack}}]};
 
-s5(cast, {APid, {fibonacci, {Num}}}, #state_data{a_pid = APid} = Data) when is_integer(Num) ->
-  %% Update our local Fibonacci state based on input.
-  Curr = case get(curr_value) of undefined -> 0; V1 -> V1 end,
-  put(prev_value, Curr),
-  put(curr_value, Num),
-  {next_state, s6, Data, [{next_event, internal, {fibonacci}}]}.
+s5(cast, {APid, {fibonacci_1, {Num}}}, #state_data{a_pid = APid} = Data) when is_integer(Num) ->
+  case get(mode) of
+    error ->
+      gen_b:send_s5_error(APid, Data),
+      {stop, normal, Data};
+    _ ->
+      Curr = case get(curr_value) of undefined -> 0; V1 -> V1 end,
+      put(prev_value, Curr),
+      put(curr_value, Num),
+      {next_state, s6, Data, [{next_event, internal, {fibonacci_2}}]}
+  end.
 
--spec s6(internal, {fibonacci}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-spec s6(internal, {fibonacci_2}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
 
-s6(internal, {fibonacci}, #state_data{a_pid = APid} = Data) ->
+s6(internal, {fibonacci_2}, #state_data{a_pid = APid} = Data) ->
   Prev = case get(prev_value) of undefined -> 0; V2 -> V2 end,
   Curr = case get(curr_value) of undefined -> 0; V3 -> V3 end,
   Next = Prev + Curr,
   put(prev_value, Curr),
   put(curr_value, Next),
-  io:format("B: s6 Sending fibonacci ~p to A~n", [Next]),
-  %% Use generated wrapper/API (this sends {fibonacci,{Num}} with the correct Path).
-  gen_b:send_s6_fibonacci(APid, Next, Data),
+  io:format("B: s6 Sending fibonacci_2 ~p to A~n", [Next]),
+  gen_b:send_s6_fibonacci_2(APid, Next, Data),
   {next_state, s5, Data}.
 
 %% Ack state

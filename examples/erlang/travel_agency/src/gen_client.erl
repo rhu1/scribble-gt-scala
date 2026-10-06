@@ -51,7 +51,7 @@
 -callback s14(cast, {pid(), {price_adjustment, {term()}}} | {pid(), {reject_confirmation}}, state_data()) -> {next_state, s15, state_data()} | {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s15(internal, {cancel_booking}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s17(cast, {pid(), {price_adjustment, {term()}}} | {pid(), {repeat_confirmation}}, state_data()) -> {next_state, s18, state_data()} | {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
--callback s18(internal, {resubmitting}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-callback s18(internal, {resubmitting}, state_data()) -> {next_state, s3, state_data()} | {next_state, s3, state_data(), [{next_event, internal, {resubmitting}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 
 %% ===== API =====
 -spec start_link(CallbackModule :: module(), Args :: list()) ->
@@ -73,7 +73,7 @@ callback_mode() -> state_functions.
 init({CallbackModule, _Args}) ->
     io:format("client: Initializing with callback module ~p~n", [CallbackModule]),
     put(callback_module, CallbackModule),
-    set_commit(#{}),
+    init_context(),
     CallbackModule:init([]).
 
 %% ---------- State functions----------
@@ -81,122 +81,33 @@ init({CallbackModule, _Args}) ->
 s3(internal, {booking_request}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s3(internal, {booking_request}, Data),
-        Next;
-s3(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
+    after_transition(Next);
+s3(cast, {_From, _Msg, Path}, Data) ->
     case stale(Path) of
       true ->
-        io:format("gen_client[s3]: Purging stale event ~p~n", [{price_quote, {Price}}]),
+        io:format("gen_client[s3]: Purging stale early-path event ~p~n", [_Msg]),
         {keep_state, Data};
       false ->
-        io:format("gen_client[s3]: Postponing event ~p~n", [{price_quote, {Price}}]),
-        {keep_state, Data, [postpone]}
-    end;
-s3(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s3]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s3]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
-        {keep_state, Data, [postpone]}
-    end;
-s3(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s3]: Purging stale event ~p~n", [{accept_confirmation}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s3]: Postponing event ~p~n", [{accept_confirmation}]),
-        {keep_state, Data, [postpone]}
-    end;
-s3(cast, {_SupplierPid, {confirm_date, {Date}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s3]: Purging stale event ~p~n", [{confirm_date, {Date}}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s3]: Postponing event ~p~n", [{confirm_date, {Date}}]),
-        {keep_state, Data, [postpone]}
-    end;
-s3(cast, {_AgencyPid, {reject_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s3]: Purging stale event ~p~n", [{reject_confirmation}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s3]: Postponing event ~p~n", [{reject_confirmation}]),
-        {keep_state, Data, [postpone]}
-    end;
-s3(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s3]: Purging stale event ~p~n", [{repeat_confirmation}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s3]: Postponing event ~p~n", [{repeat_confirmation}]),
+        io:format("gen_client[s3]: Postponing early-path event ~p~n", [_Msg]),
         {keep_state, Data, [postpone]}
     end.
 
--spec s4(cast, {pid(), {price_quote, {term()}}, list()}, state_data()) -> {next_state, s9, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s4(cast, {AgencyPid, {price_quote, {Price}}, Path}, Data) ->
+-spec s4(cast, {pid(), {price_quote, {term()}}}, state_data()) -> {next_state, s9, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
+s4(cast, {AgencyPid, {price_quote, {Price}}}, Data) ->
+    CallbackModule = get(callback_module),
+    Next = try CallbackModule:s4(cast, {AgencyPid, {price_quote, {Price}}}, Data)
+           catch error:function_clause ->
+             io:format("gen_client[s4]: Callback had no clause for ~p, ignoring~n", [{price_quote, {Price}}]),
+             {keep_state, Data}
+           end,
+    after_transition(Next);
+s4(cast, {_From, _Msg, Path}, Data) ->
     case stale(Path) of
       true ->
-        io:format("gen_client[s4]: Purging stale event ~p~n", [{price_quote, {Price}}]),
+        io:format("gen_client[s4]: Purging stale early-path event ~p~n", [_Msg]),
         {keep_state, Data};
       false ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s4(cast, {AgencyPid, {price_quote, {Price}}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_client[s4]: Callback had no clause for ~p, postponing~n", [{price_quote, {Price}}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> Next
-        end
-    end;
-s4(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s4]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s4]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
-        {keep_state, Data, [postpone]}
-    end;
-s4(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s4]: Purging stale event ~p~n", [{accept_confirmation}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s4]: Postponing event ~p~n", [{accept_confirmation}]),
-        {keep_state, Data, [postpone]}
-    end;
-s4(cast, {_SupplierPid, {confirm_date, {Date}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s4]: Purging stale event ~p~n", [{confirm_date, {Date}}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s4]: Postponing event ~p~n", [{confirm_date, {Date}}]),
-        {keep_state, Data, [postpone]}
-    end;
-s4(cast, {_AgencyPid, {reject_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s4]: Purging stale event ~p~n", [{reject_confirmation}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s4]: Postponing event ~p~n", [{reject_confirmation}]),
-        {keep_state, Data, [postpone]}
-    end;
-s4(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s4]: Purging stale event ~p~n", [{repeat_confirmation}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_client[s4]: Postponing event ~p~n", [{repeat_confirmation}]),
+        io:format("gen_client[s4]: Postponing early-path event ~p~n", [_Msg]),
         {keep_state, Data, [postpone]}
     end.
 
@@ -204,7 +115,7 @@ s4(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 s6(internal, {cancel_agency}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s6(internal, {cancel_agency}, Data),
-        Next;
+    after_transition(Next);
 s6(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -214,13 +125,21 @@ s6(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
         io:format("gen_client[s6]: Postponing event ~p~n", [{price_quote, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
-s6(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s6]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
+s6(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
+        io:format("gen_client[s6]: Purging stale interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
-        io:format("gen_client[s6]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_client[s6]: Callback had no interrupt clause for ~p, postponing~n", [{price_adjustment, {Price}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        after_transition(commit_if_taken(Next, mc1, right));
+      not_ready ->
+        io:format("gen_client[s6]: Postponing not-ready interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
 s6(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
@@ -264,7 +183,7 @@ s6(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 s7(internal, {cancel_supplier}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s7(internal, {cancel_supplier}, Data),
-        Next;
+    after_transition(Next);
 s7(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -274,13 +193,21 @@ s7(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
         io:format("gen_client[s7]: Postponing event ~p~n", [{price_quote, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
-s7(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s7]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
+s7(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
+        io:format("gen_client[s7]: Purging stale interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
-        io:format("gen_client[s7]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_client[s7]: Callback had no interrupt clause for ~p, postponing~n", [{price_adjustment, {Price}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        after_transition(commit_if_taken(Next, mc1, right));
+      not_ready ->
+        io:format("gen_client[s7]: Postponing not-ready interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
 s7(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
@@ -325,13 +252,17 @@ s7(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 s9(internal, {resubmit_request}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s9(internal, {resubmit_request}, Data),
-        Next;
+    after_transition(Next);
+s9(internal, {accept_offer}, Data) ->
+    CallbackModule = get(callback_module),
+    Next = CallbackModule:s9(internal, {accept_offer}, Data),
+    after_transition(Next);
 s9(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
         io:format("gen_client[s9]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
                catch error:function_clause ->
@@ -339,21 +270,18 @@ s9(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          {next_state, s10, _} -> commit_entry(mc1, right), Next;
-          {next_state, s10, _, _} -> commit_entry(mc1, right), Next;
-          {next_state, s6, _} -> commit_entry(mc1, left), Next;
-          {next_state, s6, _, _} -> commit_entry(mc1, left), Next;
-          _ -> Next
-        end
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s9]: Postponing not-ready event ~p~n", [{price_adjustment, {Price}}]),
+        {keep_state, Data, [postpone]}
     end;
 s9(internal, {reject_offer}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s9(internal, {reject_offer}, Data),
-        Next;
-s9(internal, {accept_offer}, Data) ->
-    CallbackModule = get(callback_module),
-    Next = CallbackModule:s9(internal, {accept_offer}, Data),
-        Next;
+    after_transition(Next);
 s9(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -402,11 +330,11 @@ s9(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 
 -spec s10(cast, {pid(), {price_adjustment, {term()}}, list()} | {pid(), {accept_confirmation}, list()}, state_data()) -> {next_state, s11, state_data()} | {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 s10(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
         io:format("gen_client[s10]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s10(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
                catch error:function_clause ->
@@ -414,15 +342,20 @@ s10(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s10]: Postponing not-ready event ~p~n", [{price_adjustment, {Price}}]),
+        {keep_state, Data, [postpone]}
     end;
 s10(cast, {AgencyPid, {accept_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, current_path()) of
+      stale ->
         io:format("gen_client[s10]: Purging stale event ~p~n", [{accept_confirmation}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s10(cast, {AgencyPid, {accept_confirmation}}, Data)
                catch error:function_clause ->
@@ -430,8 +363,11 @@ s10(cast, {AgencyPid, {accept_confirmation}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s10]: Postponing not-ready event ~p~n", [{accept_confirmation}]),
+        {keep_state, Data, [postpone]}
     end;
 s10(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
@@ -474,7 +410,7 @@ s10(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 s11(internal, {provide_address}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s11(internal, {provide_address}, Data),
-        Next;
+    after_transition(Next);
 s11(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -484,13 +420,21 @@ s11(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
         io:format("gen_client[s11]: Postponing event ~p~n", [{price_quote, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
-s11(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s11]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
+s11(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
+        io:format("gen_client[s11]: Purging stale interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
-        io:format("gen_client[s11]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_client[s11]: Callback had no interrupt clause for ~p, postponing~n", [{price_adjustment, {Price}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        after_transition(commit_if_taken(Next, mc1, right));
+      not_ready ->
+        io:format("gen_client[s11]: Postponing not-ready interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
 s11(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
@@ -532,11 +476,11 @@ s11(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 
 -spec s12(cast, {pid(), {confirm_date, {term()}}, list()}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
 s12(cast, {SupplierPid, {confirm_date, {Date}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, current_path()) of
+      stale ->
         io:format("gen_client[s12]: Purging stale event ~p~n", [{confirm_date, {Date}}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s12(cast, {SupplierPid, {confirm_date, {Date}}}, Data)
                catch error:function_clause ->
@@ -544,8 +488,11 @@ s12(cast, {SupplierPid, {confirm_date, {Date}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s12]: Postponing not-ready event ~p~n", [{confirm_date, {Date}}]),
+        {keep_state, Data, [postpone]}
     end;
 s12(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
@@ -556,13 +503,21 @@ s12(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
         io:format("gen_client[s12]: Postponing event ~p~n", [{price_quote, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
-s12(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s12]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
+s12(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
+        io:format("gen_client[s12]: Purging stale interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
-        io:format("gen_client[s12]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_client[s12]: Callback had no interrupt clause for ~p, postponing~n", [{price_adjustment, {Price}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        after_transition(commit_if_taken(Next, mc1, right));
+      not_ready ->
+        io:format("gen_client[s12]: Postponing not-ready interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
 s12(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
@@ -595,11 +550,11 @@ s12(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 
 -spec s14(cast, {pid(), {price_adjustment, {term()}}, list()} | {pid(), {reject_confirmation}, list()}, state_data()) -> {next_state, s15, state_data()} | {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 s14(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
         io:format("gen_client[s14]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s14(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
                catch error:function_clause ->
@@ -607,15 +562,20 @@ s14(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s14]: Postponing not-ready event ~p~n", [{price_adjustment, {Price}}]),
+        {keep_state, Data, [postpone]}
     end;
 s14(cast, {AgencyPid, {reject_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, current_path()) of
+      stale ->
         io:format("gen_client[s14]: Purging stale event ~p~n", [{reject_confirmation}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s14(cast, {AgencyPid, {reject_confirmation}}, Data)
                catch error:function_clause ->
@@ -623,8 +583,11 @@ s14(cast, {AgencyPid, {reject_confirmation}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s14]: Postponing not-ready event ~p~n", [{reject_confirmation}]),
+        {keep_state, Data, [postpone]}
     end;
 s14(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
@@ -667,7 +630,7 @@ s14(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 s15(internal, {cancel_booking}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s15(internal, {cancel_booking}, Data),
-        Next;
+    after_transition(Next);
 s15(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -677,13 +640,21 @@ s15(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
         io:format("gen_client[s15]: Postponing event ~p~n", [{price_quote, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
-s15(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s15]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
+s15(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
+        io:format("gen_client[s15]: Purging stale interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
-        io:format("gen_client[s15]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_client[s15]: Callback had no interrupt clause for ~p, postponing~n", [{price_adjustment, {Price}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        after_transition(commit_if_taken(Next, mc1, right));
+      not_ready ->
+        io:format("gen_client[s15]: Postponing not-ready interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
 s15(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
@@ -725,11 +696,11 @@ s15(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 
 -spec s17(cast, {pid(), {price_adjustment, {term()}}, list()} | {pid(), {repeat_confirmation}, list()}, state_data()) -> {next_state, s18, state_data()} | {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 s17(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
         io:format("gen_client[s17]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s17(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
                catch error:function_clause ->
@@ -737,15 +708,20 @@ s17(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s17]: Postponing not-ready event ~p~n", [{price_adjustment, {Price}}]),
+        {keep_state, Data, [postpone]}
     end;
 s17(cast, {AgencyPid, {repeat_confirmation}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, current_path()) of
+      stale ->
         io:format("gen_client[s17]: Purging stale event ~p~n", [{repeat_confirmation}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s17(cast, {AgencyPid, {repeat_confirmation}}, Data)
                catch error:function_clause ->
@@ -753,8 +729,11 @@ s17(cast, {AgencyPid, {repeat_confirmation}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_client[s17]: Postponing not-ready event ~p~n", [{repeat_confirmation}]),
+        {keep_state, Data, [postpone]}
     end;
 s17(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
@@ -793,11 +772,11 @@ s17(cast, {_AgencyPid, {reject_confirmation}, Path}, Data) ->
         {keep_state, Data, [postpone]}
     end.
 
--spec s18(internal, {resubmitting}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-spec s18(internal, {resubmitting}, state_data()) -> {next_state, s3, state_data()} | {next_state, s3, state_data(), [{next_event, internal, {resubmitting}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 s18(internal, {resubmitting}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s18(internal, {resubmitting}, Data),
-        Next;
+    after_transition(Next);
 s18(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -807,13 +786,21 @@ s18(cast, {_AgencyPid, {price_quote, {Price}}, Path}, Data) ->
         io:format("gen_client[s18]: Postponing event ~p~n", [{price_quote, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
-s18(cast, {_AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_client[s18]: Purging stale event ~p~n", [{price_adjustment, {Price}}]),
+s18(cast, {AgencyPid, {price_adjustment, {Price}}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, right)) of
+      stale ->
+        io:format("gen_client[s18]: Purging stale interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data};
-      false ->
-        io:format("gen_client[s18]: Postponing event ~p~n", [{price_adjustment, {Price}}]),
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {AgencyPid, {price_adjustment, {Price}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_client[s18]: Callback had no interrupt clause for ~p, postponing~n", [{price_adjustment, {Price}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        after_transition(commit_if_taken(Next, mc1, right));
+      not_ready ->
+        io:format("gen_client[s18]: Postponing not-ready interrupt ~p~n", [{price_adjustment, {Price}}]),
         {keep_state, Data, [postpone]}
     end;
 s18(cast, {_AgencyPid, {accept_confirmation}, Path}, Data) ->
@@ -858,14 +845,12 @@ s18(cast, {_AgencyPid, {repeat_confirmation}, Path}, Data) ->
 
 -spec send_s3_booking_request(AgencyPid :: pid(), term(), _Data :: state_data()) -> ok.
 send_s3_booking_request(AgencyPid, Destination, _Data) ->
-    Path = current_path(),
-    gen_statem:cast(AgencyPid, {self(), {booking_request, {Destination}}, Path}).
+    gen_statem:cast(AgencyPid, {self(), {booking_request, {Destination}}}).
 
 
 -spec send_s3_booking_request(AgencyPid :: pid(), _Data :: state_data()) -> ok.
 send_s3_booking_request(AgencyPid, _Data) ->
-    Path = current_path(),
-    gen_statem:cast(AgencyPid, {self(), {booking_request}, Path}).
+    gen_statem:cast(AgencyPid, {self(), {booking_request}}).
 
 
 -spec send_s6_cancel_agency(AgencyPid :: pid(), _Data :: state_data()) -> ok.
@@ -882,19 +867,22 @@ send_s7_cancel_supplier(SupplierPid, _Data) ->
 
 -spec send_s9_reject_offer(AgencyPid :: pid(), _Data :: state_data()) -> ok.
 send_s9_reject_offer(AgencyPid, _Data) ->
-    Path = current_path(),
+    Path = branch_path(mc1, left),
+    set_current_path(Path),
     gen_statem:cast(AgencyPid, {self(), {reject_offer}, Path}).
 
 
 -spec send_s9_resubmit_request(AgencyPid :: pid(), _Data :: state_data()) -> ok.
 send_s9_resubmit_request(AgencyPid, _Data) ->
-    Path = current_path(),
+    Path = branch_path(mc1, left),
+    set_current_path(Path),
     gen_statem:cast(AgencyPid, {self(), {resubmit_request}, Path}).
 
 
 -spec send_s9_accept_offer(AgencyPid :: pid(), _Data :: state_data()) -> ok.
 send_s9_accept_offer(AgencyPid, _Data) ->
-    Path = current_path(),
+    Path = branch_path(mc1, left),
+    set_current_path(Path),
     gen_statem:cast(AgencyPid, {self(), {accept_offer}, Path}).
 
 
@@ -933,36 +921,73 @@ terminate(_Reason, _State, _StateData) ->
     ok.
 
 
-%% ---------- GC / commitment helpers (per-mixed-choice side) ----------
-%% We track, per MC id, which side this role is committed to: left | right.
-%% Uncommitted MCs have no entry.
 get_commit() -> case get(commit_map) of undefined -> #{}; M -> M end.
 set_commit(M) -> put(commit_map, M), M.
 
--spec commit_entry(atom(), left | right) -> map().
-commit_entry(McId, Side) when Side =:= left; Side =:= right ->
-    set_commit(maps:put(McId, Side, get_commit())).
+init_context() ->
+    set_current_path([]),
+    set_commit(#{}),
+    ok.
 
-%% Staleness follows Section 4.1: a message is stale if, for some MC on its Path,
-%% following the Path hits a stale side (i.e., we are committed to the opposite side).
-%% We approximate local type commitment using the commit_map.
+-spec current_path() -> [left | right].
+current_path() -> case get(mc_path) of undefined -> []; Path -> Path end.
 
--spec stale([{atom(), left | right}]) -> boolean().
-stale(Path) when is_list(Path) ->
-    Commit = get_commit(),
-    lists:any(
-      fun({Mc, MsgSide}) ->
-        case maps:find(Mc, Commit) of
-          error -> false; %% not committed => nothing is stale for this MC
-          {ok, LocalSide} -> LocalSide =/= MsgSide
+set_current_path(Path) -> put(mc_path, Path), Path.
+
+enter_mc(McId) ->
+    Prefix = current_path(),
+    set_commit(maps:put(Prefix, {McId, none}, get_commit())),
+    ok.
+
+active_prefix(McId) ->
+    Current = current_path(),
+    Candidates = lists:filtermap(
+      fun({Prefix, {FrameMc, _Side}}) ->
+        case FrameMc =:= McId andalso lists:prefix(Prefix, Current) of
+          true -> {true, {length(Prefix), Prefix}};
+          false -> false
         end
-      end, Path).
+      end, maps:to_list(get_commit())),
+    case Candidates of
+      [] -> error({missing_mixed_choice, McId, Current});
+      _ -> element(2, lists:max(Candidates))
+    end.
+
+branch_path(McId, Side) when Side =:= left; Side =:= right ->
+    active_prefix(McId) ++ [Side].
+
+commit_current(McId, Side) when Side =:= left; Side =:= right ->
+    Prefix = active_prefix(McId),
+    set_commit(maps:put(Prefix, {McId, Side}, get_commit())),
+    set_current_path(Prefix ++ [Side]),
+    ok.
 
 
-%% current_path/0 is used only to annotate outgoing messages with the sender's
-%% current MC context, when this role is inside an active mixed-choice region.
--spec current_path() -> [{atom(), left | right}].
-current_path() ->
-    Commit = get_commit(),
-    lists:sort(maps:to_list(Commit)).
+commit_if_taken(Next, McId, Side) ->
+    case Next of
+      {keep_state, _} -> Next;
+      {keep_state, _, _} -> Next;
+      _ -> commit_current(McId, Side), Next
+    end.
+
+after_transition({next_state, s9, _} = Next) -> enter_mc(mc1), Next;
+after_transition({next_state, s9, _, _} = Next) -> enter_mc(mc1), Next;
+after_transition(Next) -> Next.
+
+message_status(Path, Expected) ->
+    case stale(Path) of
+      true -> stale;
+      false when Path =:= Expected -> ready;
+      false -> not_ready
+    end.
+
+-spec stale([left | right]) -> boolean().
+stale(Path) when is_list(Path) -> stale(Path, [], get_commit()).
+
+stale([], _Prefix, _Frames) -> false;
+stale([Side | Rest], Prefix, Frames) ->
+    case maps:find(Prefix, Frames) of
+      {ok, {_McId, Commit}} when Commit =/= none, Commit =/= Side -> true;
+      _ -> stale(Rest, Prefix ++ [Side], Frames)
+    end.
 

@@ -14,7 +14,7 @@
 -export([init/1, callback_mode/0, start_link/0, s1/3, make_choice_s9/1, s9/3, s10/3, s13/3, s5/3, s6/3]).
 
 -include("logs.hrl").
--type state_data() :: #state_data{mc_path :: [atom()], controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -26,7 +26,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("logs initialized ~n", []),
     {ok, s1, Data}.
 

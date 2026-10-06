@@ -30,7 +30,6 @@
 	]).
 
 -include("seller.hrl").
-%% state_data record is defined in seller.hrl (mc_path + peer pids).
 -type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.

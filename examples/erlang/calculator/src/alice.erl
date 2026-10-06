@@ -4,7 +4,7 @@
 -export([init/1, callback_mode/0, start_link/0, s4/3]).
 
 -include("alice.hrl").
--type state_data() :: #state_data{mc_path :: [atom()], carol_pid :: pid() | undefined, srv_pid :: pid() | undefined}.
+-type state_data() :: #state_data{carol_pid :: pid() | undefined, srv_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -16,7 +16,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s4, state_data()}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("alice initialized ~n", []),
     {ok, s4, Data}.
 

@@ -15,7 +15,7 @@
 -export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, make_choice_s7/1, s7/3, s8/3, s9/3, s11/3, s12/3, s5/3]).
 
 -include("carol.hrl").
--type state_data() :: #state_data{mc_path :: [atom()], srv_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
+-type state_data() :: #state_data{srv_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -27,7 +27,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data(), [{next_event, internal, {first}}]}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("carol initialized ~n", []),
     {ok, s1, Data, [{next_event, internal, {first}}]}.
 

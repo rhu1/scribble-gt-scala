@@ -13,7 +13,7 @@
 -export([init/1, callback_mode/0, start_link/0, s1/3, s4/3, s8/3]).
 
 -include("usr.hrl").
--type state_data() :: #state_data{mc_path :: [atom()], storage_pid :: pid() | undefined, api_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{storage_pid :: pid() | undefined, api_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -25,7 +25,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("usr initialized ~n", []),
     {ok, s1, Data}.
 

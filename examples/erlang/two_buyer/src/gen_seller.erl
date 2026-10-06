@@ -64,7 +64,8 @@ callback_mode() -> state_functions.
 init({CallbackModule, _Args}) ->
     io:format("seller: Initializing with callback module ~p~n", [CallbackModule]),
     put(callback_module, CallbackModule),
-    set_commit(#{}),
+    init_context(),
+    enter_mc(mc2),
     CallbackModule:init([]).
 
 %% ---------- State functions----------
@@ -72,7 +73,7 @@ init({CallbackModule, _Args}) ->
 s3(internal, {not_available}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s3(internal, {not_available}, Data),
-        Next;
+    after_transition(Next);
 s3(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -104,11 +105,11 @@ s3(cast, {_BobPid, {accept_quote}, Path}, Data) ->
 %% Mixed-choice entry state
 -spec s5(internal | cast, {not_available} | {pid(), {request_title, {term()}}, list()}, state_data()) -> {next_state, s3, state_data()} | {next_state, s6, state_data()} | {next_state, s3, state_data(), [{next_event, internal, {not_available}}] } | {next_state, s6, state_data(), [{next_event, internal, {not_available}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 s5(cast, {AlicePid, {request_title, {Title}}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc2, left)) of
+      stale ->
         io:format("gen_seller[s5]: Purging stale event ~p~n", [{request_title, {Title}}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s5(cast, {AlicePid, {request_title, {Title}}}, Data)
                catch error:function_clause ->
@@ -116,17 +117,20 @@ s5(cast, {AlicePid, {request_title, {Title}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          {next_state, s3, _} -> commit_entry(mc1, right), Next;
-          {next_state, s3, _, _} -> commit_entry(mc1, right), Next;
-          {next_state, s6, _} -> commit_entry(mc1, left), Next;
-          {next_state, s6, _, _} -> commit_entry(mc1, left), Next;
-          _ -> Next
-        end
+          {next_state, s3, _} -> after_transition(commit_if_taken(Next, mc2, right));
+          {next_state, s3, _, _} -> after_transition(commit_if_taken(Next, mc2, right));
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc2, left));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc2, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_seller[s5]: Postponing not-ready event ~p~n", [{request_title, {Title}}]),
+        {keep_state, Data, [postpone]}
     end;
 s5(internal, {not_available}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s5(internal, {not_available}, Data),
-        Next;
+    after_transition(Next);
 s5(cast, {_BobPid, {reject_quote}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -150,7 +154,7 @@ s5(cast, {_BobPid, {accept_quote}, Path}, Data) ->
 s6(internal, {price_quote}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s6(internal, {price_quote}, Data),
-        Next;
+    after_transition(Next);
 s6(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -183,7 +187,7 @@ s6(cast, {_BobPid, {accept_quote}, Path}, Data) ->
 s7(internal, {price_quote}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s7(internal, {price_quote}, Data),
-        Next;
+    after_transition(Next);
 s7(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -216,7 +220,7 @@ s7(cast, {_BobPid, {accept_quote}, Path}, Data) ->
 s9(internal, {response_timeout}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s9(internal, {response_timeout}, Data),
-        Next;
+    after_transition(Next);
 s9(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -247,36 +251,12 @@ s9(cast, {_BobPid, {accept_quote}, Path}, Data) ->
 
 %% Mixed-choice entry state
 -spec s11(internal | cast, {response_timeout} | {pid(), {reject_quote}, list()} | {pid(), {accept_quote}, list()}, state_data()) -> {next_state, s12, state_data()} | {next_state, s14, state_data()} | {next_state, s9, state_data()} | {next_state, s12, state_data(), [{next_event, internal, {response_timeout}}] } | {next_state, s14, state_data(), [{next_event, internal, {response_timeout}}] } | {next_state, s9, state_data(), [{next_event, internal, {response_timeout}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
-s11(cast, {BobPid, {reject_quote}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_seller[s11]: Purging stale event ~p~n", [{reject_quote}]),
-        {keep_state, Data};
-      false ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s11(cast, {BobPid, {reject_quote}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_seller[s11]: Callback had no clause for ~p, postponing~n", [{reject_quote}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          {next_state, s9, _} -> commit_entry(mc2, right), Next;
-          {next_state, s9, _, _} -> commit_entry(mc2, right), Next;
-          {next_state, s12, _} -> commit_entry(mc2, left), Next;
-          {next_state, s12, _, _} -> commit_entry(mc2, left), Next;
-          _ -> Next
-        end
-    end;
-s11(internal, {response_timeout}, Data) ->
-    CallbackModule = get(callback_module),
-    Next = CallbackModule:s11(internal, {response_timeout}, Data),
-        Next;
 s11(cast, {BobPid, {accept_quote}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, left)) of
+      stale ->
         io:format("gen_seller[s11]: Purging stale event ~p~n", [{accept_quote}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s11(cast, {BobPid, {accept_quote}}, Data)
                catch error:function_clause ->
@@ -284,12 +264,42 @@ s11(cast, {BobPid, {accept_quote}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          {next_state, s9, _} -> commit_entry(mc2, right), Next;
-          {next_state, s9, _, _} -> commit_entry(mc2, right), Next;
-          {next_state, s12, _} -> commit_entry(mc2, left), Next;
-          {next_state, s12, _, _} -> commit_entry(mc2, left), Next;
-          _ -> Next
-        end
+          {next_state, s9, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s9, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s12, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s12, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_seller[s11]: Postponing not-ready event ~p~n", [{accept_quote}]),
+        {keep_state, Data, [postpone]}
+    end;
+s11(internal, {response_timeout}, Data) ->
+    CallbackModule = get(callback_module),
+    Next = CallbackModule:s11(internal, {response_timeout}, Data),
+    after_transition(Next);
+s11(cast, {BobPid, {reject_quote}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, left)) of
+      stale ->
+        io:format("gen_seller[s11]: Purging stale event ~p~n", [{reject_quote}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s11(cast, {BobPid, {reject_quote}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_seller[s11]: Callback had no clause for ~p, postponing~n", [{reject_quote}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s9, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s9, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s14, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s14, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_seller[s11]: Postponing not-ready event ~p~n", [{reject_quote}]),
+        {keep_state, Data, [postpone]}
     end;
 s11(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
@@ -305,7 +315,7 @@ s11(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
 s12(internal, {purchase_confirmed}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s12(internal, {purchase_confirmed}, Data),
-        Next;
+    after_transition(Next);
 s12(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -338,7 +348,7 @@ s12(cast, {_BobPid, {accept_quote}, Path}, Data) ->
 s14(internal, {cancel_confirmation}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s14(internal, {cancel_confirmation}, Data),
-        Next;
+    after_transition(Next);
 s14(cast, {_AlicePid, {request_title, {Title}}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -378,7 +388,8 @@ send_s3_not_available(BobPid, _Data) ->
 
 -spec send_s5_not_available(AlicePid :: pid(), _Data :: state_data()) -> ok.
 send_s5_not_available(AlicePid, _Data) ->
-    Path = current_path(),
+    Path = branch_path(mc2, right),
+    commit_current(mc2, right),
     gen_statem:cast(AlicePid, {self(), {not_available}, Path}).
 
 
@@ -414,7 +425,8 @@ send_s9_response_timeout(AlicePid, _Data) ->
 
 -spec send_s11_response_timeout(BobPid :: pid(), _Data :: state_data()) -> ok.
 send_s11_response_timeout(BobPid, _Data) ->
-    Path = current_path(),
+    Path = branch_path(mc1, right),
+    commit_current(mc1, right),
     gen_statem:cast(BobPid, {self(), {response_timeout}, Path}).
 
 
@@ -441,36 +453,75 @@ terminate(_Reason, _State, _StateData) ->
     ok.
 
 
-%% ---------- GC / commitment helpers (per-mixed-choice side) ----------
-%% We track, per MC id, which side this role is committed to: left | right.
-%% Uncommitted MCs have no entry.
 get_commit() -> case get(commit_map) of undefined -> #{}; M -> M end.
 set_commit(M) -> put(commit_map, M), M.
 
--spec commit_entry(atom(), left | right) -> map().
-commit_entry(McId, Side) when Side =:= left; Side =:= right ->
-    set_commit(maps:put(McId, Side, get_commit())).
+init_context() ->
+    set_current_path([]),
+    set_commit(#{}),
+    ok.
 
-%% Staleness follows Section 4.1: a message is stale if, for some MC on its Path,
-%% following the Path hits a stale side (i.e., we are committed to the opposite side).
-%% We approximate local type commitment using the commit_map.
+-spec current_path() -> [left | right].
+current_path() -> case get(mc_path) of undefined -> []; Path -> Path end.
 
--spec stale([{atom(), left | right}]) -> boolean().
-stale(Path) when is_list(Path) ->
-    Commit = get_commit(),
-    lists:any(
-      fun({Mc, MsgSide}) ->
-        case maps:find(Mc, Commit) of
-          error -> false; %% not committed => nothing is stale for this MC
-          {ok, LocalSide} -> LocalSide =/= MsgSide
+set_current_path(Path) -> put(mc_path, Path), Path.
+
+enter_mc(McId) ->
+    Prefix = current_path(),
+    set_commit(maps:put(Prefix, {McId, none}, get_commit())),
+    ok.
+
+active_prefix(McId) ->
+    Current = current_path(),
+    Candidates = lists:filtermap(
+      fun({Prefix, {FrameMc, _Side}}) ->
+        case FrameMc =:= McId andalso lists:prefix(Prefix, Current) of
+          true -> {true, {length(Prefix), Prefix}};
+          false -> false
         end
-      end, Path).
+      end, maps:to_list(get_commit())),
+    case Candidates of
+      [] -> error({missing_mixed_choice, McId, Current});
+      _ -> element(2, lists:max(Candidates))
+    end.
+
+branch_path(McId, Side) when Side =:= left; Side =:= right ->
+    active_prefix(McId) ++ [Side].
+
+commit_current(McId, Side) when Side =:= left; Side =:= right ->
+    Prefix = active_prefix(McId),
+    set_commit(maps:put(Prefix, {McId, Side}, get_commit())),
+    set_current_path(Prefix ++ [Side]),
+    ok.
 
 
-%% current_path/0 is used only to annotate outgoing messages with the sender's
-%% current MC context, when this role is inside an active mixed-choice region.
--spec current_path() -> [{atom(), left | right}].
-current_path() ->
-    Commit = get_commit(),
-    lists:sort(maps:to_list(Commit)).
+commit_if_taken(Next, McId, Side) ->
+    case Next of
+      {keep_state, _} -> Next;
+      {keep_state, _, _} -> Next;
+      _ -> commit_current(McId, Side), Next
+    end.
+
+after_transition({next_state, s5, _} = Next) -> enter_mc(mc2), Next;
+after_transition({next_state, s5, _, _} = Next) -> enter_mc(mc2), Next;
+after_transition({next_state, s11, _} = Next) -> enter_mc(mc1), Next;
+after_transition({next_state, s11, _, _} = Next) -> enter_mc(mc1), Next;
+after_transition(Next) -> Next.
+
+message_status(Path, Expected) ->
+    case stale(Path) of
+      true -> stale;
+      false when Path =:= Expected -> ready;
+      false -> not_ready
+    end.
+
+-spec stale([left | right]) -> boolean().
+stale(Path) when is_list(Path) -> stale(Path, [], get_commit()).
+
+stale([], _Prefix, _Frames) -> false;
+stale([Side | Rest], Prefix, Frames) ->
+    case maps:find(Prefix, Frames) of
+      {ok, {_McId, Commit}} when Commit =/= none, Commit =/= Side -> true;
+      _ -> stale(Rest, Prefix ++ [Side], Frames)
+    end.
 

@@ -28,8 +28,7 @@
          s7/3, s9/3]).
 
 -include("srv.hrl").
-%% state_data record is defined in srv.hrl (commit/GC metadata + peer pids).
--type state_data() :: #state_data{mc_path :: [atom()], carol_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
+-type state_data() :: #state_data{carol_pid :: pid() | undefined, alice_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -41,7 +40,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("srv initialized ~n", []),
     {ok, s1, Data}.
 

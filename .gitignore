@@ -1,0 +1,19 @@
+.DS_Store
+.bsp/
+.idea/
+.bloop/
+.metals/
+*.iml
+*.log
+
+target/
+generated/
+_build/
+
+rebar.lock
+erl_crash.dump
+rebar3.crashdump
+
+# Release outputs (Zenodo archives, notes)
+/dist/
+/*.tar.gz

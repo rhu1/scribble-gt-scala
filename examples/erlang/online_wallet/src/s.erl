@@ -10,7 +10,6 @@
 -export([init/1, callback_mode/0, start_link/0, s1/3, s4/3, make_choice_timeout/1, s8/3, make_choice_pay/1, make_choice_quit/1, s9/3, s12/3, s6/3]).
 
 -include("s.hrl").
-%% state_data record is defined in s.hrl (mc_path + peer pids).
 -type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.

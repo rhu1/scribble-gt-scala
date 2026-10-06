@@ -12,7 +12,7 @@ From the repository root:
 
 This will:
 - run the RabbitMQ selective-consumer unit tests (reported as `rabbitmq_server(amqp_client_eunit)`), and
-- compile and smoke-run each OTP app under this directory.
+- compile, run EUnit, and smoke-start each OTP app under this directory.
 
 ## Apps
 

@@ -21,7 +21,6 @@
  ]).
 
 -include("q.hrl").
-%% state_data record is defined in q.hrl (mc_path + peer pids). Keep type alias in sync.
 -type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.

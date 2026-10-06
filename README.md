@@ -11,12 +11,25 @@
 
 # 1. <a name="INTRO"></a> Introduction
 
-## 1.1. Archive contents
+## 1.1. Repository and image archives
 
-The artifact archive `paper321.zip` contains:
+This artifact accompanies the paper *Mixed Choice in Asynchronous Multiparty
+Session Types* by Laura Bocchi, Raymond Hu, Adriana Laura Voinea and Simon
+Thompson, Proc. ACM Program. Lang. 10, OOPSLA (2026),
+[doi:10.1145/3798256](https://doi.org/10.1145/3798256)
+([arXiv:2602.23927](https://arxiv.org/abs/2602.23927)).
 
-- An **Overview** of the artifact (i.e., this document) in three formats:
-    - markdown: `README.md` -- links clickable depending on markdown viewer app;
+This repository contains the artifact source code and this Markdown overview.
+The artifact's Zenodo record also has pre-built Docker images of the
+toolchain, one per architecture:
+
+- `scribble-gt-scala-v2-docker-amd64.tar.gz`: `linux/amd64` (most Linux and
+  Windows machines, Intel Macs)
+- `scribble-gt-scala-v2-docker-arm64.tar.gz`: `linux/arm64` (Apple Silicon
+  Macs, ARM Linux)
+
+See [3.1](#INITIAL) for how to load a pre-built image or build the image from
+this repository.
 
 This Overview has the following sections:
 
@@ -32,7 +45,7 @@ This Overview has the following sections:
 ## 1.2. <a name="PURPOSE"></a> Purpose: A toolchain for specifying and implementing Erlang `gen_statem` programs using mixed-choice multiparty session types
 
 This artifact demonstrates the prototype toolchain presented in the
-submitted paper.
+paper.
 
 Acronyms:
 
@@ -45,7 +58,8 @@ main steps:
 1. **Specify the message passing protocol** using our mixed-choice extension of the Scribble protocol language.  
    Our tool statically validates the syntactic conditions for well-formedness
    based on our theory in the paper.
-   If valid, it generates, for each role in the protocol, two Erlang modules:
+   If valid, it generates, for each role in the protocol, two Erlang modules
+   (plus a header `<role>.hrl` with the role's state record):
    - **A protocol-enforcing generic behaviour module -- `gen_<role>.erl`**  
      This module is a library that programmers use but do not modify.  It
      provides a protocol- and role-specific `gen_statem` wrapper that enforces
@@ -76,6 +90,22 @@ The programmer can complete the program as follows.
 
 ---
 
+# 2. <a name="HARDWARE"></a> Hardware dependencies
+
+The Docker image runs on `linux/amd64` and `linux/arm64`, and Zenodo has a
+pre-built image for each (see [1.1](#INTRO)). A loaded image takes about 2 GB
+of disk. The pre-built images contain everything the examples and tests below
+need, so they also run without network access.
+
+Building the image yourself downloads and compiles Erlang/OTP, Elixir, and the
+Scala dependencies, so Docker must have network access and sufficient memory
+and disk space for those toolchains.
+An image built from a fresh clone or the source zip also fetches the RabbitMQ case study's
+third-party Erlang dependencies the first time its tests run, so it needs
+network access for that step.
+
+---
+
 # 3. <a name="START"></a> Getting started guide
 
 
@@ -92,24 +122,44 @@ The programmer can complete the program as follows.
 
 **Steps** for starting from scratch.
 
-1. **Build the Docker image from this repository (default).**
+1. **Get the Docker image**, either by loading a pre-built one or by building
+   it from this repository.
 
-   From the repository root directory, run:
+   To load a pre-built image from Zenodo, use the archive for your machine's
+   architecture (see [1.1](#INTRO)):
    ```sh
-   docker build -t scribble-gt:local .
-   docker run -it --rm --entrypoint /bin/bash scribble-gt:local
+   docker load -i scribble-gt-scala-v2-docker-amd64.tar.gz   # or ...-arm64.tar.gz
+   docker run -it --rm scribble-gt:v2
    ```
 
-3. **Optional quick (non-interactive) sanity checks**.
+   To build the image instead, run from the repository root directory:
+   ```sh
+   docker build -t scribble-gt:local .
+   docker run -it --rm scribble-gt:local
+   ```
+
+   To build a remote branch instead of the current checkout, use:
+
+   ```sh
+   docker build --build-arg USE_GIT_CLONE=1 --build-arg GIT_REF=artifact -t scribble-gt:artifact .
+   ```
+
+   `GIT_REF` also accepts a tag, e.g. `v2` to build exactly this version.
+
+   Either way, `docker run -it` opens a shell in `/scribble-gt-scala` inside
+   the container. The commands below use the tag `scribble-gt:local`; use
+   `scribble-gt:v2` instead if you loaded a pre-built image.
+
+2. **Optional quick (non-interactive) sanity checks**.
 
    Instead of opening an interactive shell, you can run:
 
    ```sh
-   docker run --rm --entrypoint /bin/bash scribble-gt:local -lc "./mMST.sh -run-scribble-examples"
-   docker run --rm --entrypoint /bin/bash scribble-gt:local -lc "./mMST.sh -run-erlang-examples"
+   docker run --rm scribble-gt:local -lc "./mMST.sh -run-scribble-examples"
+   docker run --rm scribble-gt:local -lc "./mMST.sh -run-erlang-examples"
    ```
 
-4. **Test: Protocol validation and code generation.**
+3. **Test: Protocol validation and code generation.**
     The simplest way to check that the toolchain is working is to run the main script that processes all of our example protocols.  This will validate each protocol and generate the corresponding Erlang code.
     Inside the container, run:
     ```sh
@@ -124,13 +174,15 @@ The programmer can complete the program as follows.
     ./mMST.sh -run-erlang-examples
     ```
     **Expected output**.
-    The script will iterate through each Erlang/OTP application located in `examples/erlang/`, executing them individually. It will display the output of each application on the console, including logs of the state machines(`*DBG*`). It should complete without errors.
+    The script will run the RabbitMQ selective-consumer tests, then compile,
+    run EUnit, and smoke-start every Erlang/OTP application in
+    `examples/erlang/`. It should finish with zero failures.
 
     Notes:
     - The container runs as an unprivileged user and the workspace is writable, so `target/` log files can be created.
     - Minimal viewing tools (`less`, `nano`, `vi`) are available in the image.
 
-5. **Test: Compile and run an Erlang example.**
+4. **Test: Compile and run an Erlang example.**
     Let's run the `CircuitBreaker` example.
     Inside the container, go to the example's directory and
     launch an Erlang shell using `rebar3`:
@@ -140,36 +192,36 @@ The programmer can complete the program as follows.
     ```
     Inside the Erlang shell (you'll see a `===> Verifying dependencies...` message followed by an Erlang prompt `1>`), start the application:
     ```rebar3
-    application:start(circuit_breaker).
+    application:ensure_all_started(circuit_breaker).
     ```
     **Expected output**.
     You will see log messages from the different roles (API, Controller, Storage, User) as they interact according to the protocol. Debug logs (`*DBG*`) from the generated gen_<role>.erl modules provide detailed information about events internal to the EFSM, such as message receptions, consumptions, and state transitions, which verify correct protocol execution.
    The output should look similar to the following (though the exact interleaving and branch choices may vary due to random selection):
    ```
-    ok
+    {ok,[circuit_breaker]}
     *DBG* usr consume internal init_state in state s1
-    2> Controller: s1 Sending start_storage to Storage 
-    *DBG* controller receive internal {start_controller} in state s1
-    *DBG* storage receive cast {<0.142.0>,{start_storage}} in state s1
-    Storage: s1 Received start_storage from Controller <0.142.0>
+    2> Controller: s1 Sending start_storage to Storage
+    *DBG* controller receive internal {start_controller} in state s3
+    *DBG* storage receive cast {<0.155.0>,{start_storage}} in state s1
+    Storage: s1 Received start_storage from Controller <0.155.0>
     *DBG* controller consume internal {start_storage} in state s1 => s3
-    *DBG* storage receive internal {hard_ping} in state s1
-    Controller: s3 Sending start_controller to API 
+    Controller: s3 Sending start_controller to API
+    *DBG* storage receive internal {hard_ping} in state s3
     ...
     ```
 
-6.  Stop the example.
+5.  Stop the example.
     First, stop the application.  In the Erlang shell:
     ```rebar3
     application:stop(circuit_breaker).
     ```
-    You can then exit the Erlang shell by pressing `ctrl+c`,
+    You can then exit the Erlang shell by pressing Ctrl+C twice,
     or by entering `q().` and pressing Enter.
 
 
 ---
 
-## 3.2. <a name="DIRS"></a> Main directories insider the container
+## 3.2. <a name="DIRS"></a> Main directories inside the container
 
 <table border-collapse="collapse">
 <tr>
@@ -180,39 +232,42 @@ The programmer can complete the program as follows.
 <tr>
 <td>Toolchain</td>
 <td>Base dir</td>
-<td><code>scribble-gt-scala</code></td>
+<td><code>/scribble-gt-scala</code></td>
 </tr>
 <tr>
 <td></td>
 <td>Main scripts and sources</td>
-<td><code>scribble-gt-scala/src</code>, <code>scribble-gt-scala/mMST.sh</code></td>
+<td><code>/scribble-gt-scala/src</code>, <code>/scribble-gt-scala/mMST.sh</code></td>
 </tr>
 <tr>
 <td></td>
 <td>Base out dir for <code>mMST.sh</code></td>
-<td><code>scribble-gt-scala/generated</code></td>
+<td><code>/scribble-gt-scala/generated</code></td>
 </tr>
 <tr>
 <td>Examples</td>
 <td>Base dir</td>
-<td><code>scribble-gt-scala/examples</code></td>
+<td><code>/scribble-gt-scala/examples</code></td>
 </tr>
 <tr>
 <td></td>
 <td>Protocol specifications</td>
-<td><code>scribble-gt-scala/examples/scribble</code></td>
+<td><code>/scribble-gt-scala/examples/scribble</code></td>
 </tr>
 <tr>
 <td></td>
 <td>Erlang implementations</td>
-<td><code>scribble-gt-scala/examples/erlang</code> (generated OTP apps)</td>
+<td><code>/scribble-gt-scala/examples/erlang</code> (generated OTP apps)</td>
 </tr>
 </table>
 
-Modules found in the Base dir other than `scribble-gt` are just the
-pre-existing modules inherited from base Scribble.  Our work for this artifact
-is in specifically the mentioned `scribble-gt` module.
-This repository is a standalone Scala codebase; our work for this artifact is in `src/`.
+This repository is a standalone sbt project. The base Scribble toolchain is
+included as pre-built jars in `lib/`. Our work for this artifact is in `src/`:
+the Scribble grammar extended with mixed choice (`src/main/antlr3`); the Java
+extension of Scribble, with its parser, AST, command line, EFSM model and
+code-generation helpers (`src/main/java`); and the Scala implementation of
+the session types, validation, projection, EFSM construction and Erlang code
+generation (`src/main/scala/com/github/rhu1/gt`).
 
 ---
 
@@ -230,10 +285,11 @@ container are:
 The main script is:  
 
 ```sh
-./mMST.sh <<flag>> <<flagargs>> <protocolfile>
+./mMST.sh [option]... <protocolfile>
 ```
 
-The `<protocolfile>` is a `.scr` file and is mandatory.  The other `<<..>>` elements are optional.
+The `<protocolfile>` is mandatory for validation and generation commands. The
+batch, copy, and clean commands do not take a protocol file.
 
 The following demonstrates usages and key flags.  Assume we are in the
 `scribble-gt-scala` directory inside the container:
@@ -269,12 +325,13 @@ The following demonstrates usages and key flags.  Assume we are in the
   ```
   The output will be written to `/tmp/generated/<ProtocolName>/`.
 
-- Disable idle GC support in the generated runtime:
+- Generate the runtime without garbage collection of stale messages (no
+  mixed-choice path tracking or purging):
   ```sh
   ./mMST.sh -proto <ProtocolName> -no-gc examples/scribble/<FileName.scr>
   ```
 
-- Remove generated files and build artifacts from the Erlang examples:
+- Remove `generated/`, the sbt build, and the build artifacts of the Erlang examples:
   ```sh
   ./mMST.sh -clean-all
   ```
@@ -284,7 +341,7 @@ The following demonstrates usages and key flags.  Assume we are in the
 `mMST.sh` is a thin wrapper around the Scala main class:
 
 ```sh
-sbt "runMain com.github.rhu1.gt.main.Main <path/to/file.scr> [-proto Name] (-all | -roles R1 R2 ...) [-out ./generated] [-no-gc]"
+sbt "runMain com.github.rhu1.gt.main.Main <path/to/file.scr> -gt-generate-efsms <ProtocolName> [-all | -roles R1 R2 ...] [-out ./generated] [-no-gc]"
 ```
 
 ### Scala entry point for code generation
@@ -338,10 +395,21 @@ Minor corrections.
 
 Other notes.
 
-- In the error messages of our tool:
-  - The terminology "clear-termination" in our paper is often instead called "left committing".
-  - The terminology "single-decision" in our paper is often instead called
-    "right commiting".
+- For each protocol, validation prints `<Module>.<Protocol>: OK` or
+  `<Module>.<Protocol>: FAIL`.  For an invalid protocol it then prints which
+  of the conditions from the paper hold -- `WF` (well-formedness), `SD`
+  (single-decision), `CT` (clear-termination) and `BA` (balance) -- and stops
+  with `java.lang.RuntimeException: Invalid: <Module>.<Protocol>`.  E.g.:
+  ```
+  Balance.balance: FAIL
+
+  WF=true
+  SD=true
+  CT=true
+  BA=false
+  ```
+  A protocol that satisfies all four conditions but cannot be projected
+  stops with `Couldn't project to <Role>`.
 
 
 
@@ -365,7 +433,7 @@ Other notes.
 
 ### 4.1.1. <a name="TABLE1"></a> Examples from Table 1 in the paper
 
-Please the Table 1 in the paper for references for the examples.
+See Table 1 in the paper for references to the examples.
 
 <table style="border-collapse: collapse">
 <tr>
@@ -408,13 +476,13 @@ Please the Table 1 in the paper for references for the examples.
 <td>SMTP</td>
 <td><code>SMTP.scr</code></td>
 <td><code>smtp</code></td>
-<td><code>SMTP/src</code></td>
+<td><code>smtp/src</code></td>
 </tr>
 <tr>
 <td>(6)</td>
 <td>TwoBuyer</td>
 <td><code>TwoBuyer.scr</code></td>
-<td><code>twobuyer</code></td>
+<td><code>two_buyer</code></td>
 <td><code>two_buyer/src</code></td>
 </tr>
 <tr>
@@ -438,12 +506,12 @@ Please the Table 1 in the paper for references for the examples.
 - The dir/application name is both:
   - The name of the subdirectory containing the example Erlang implementation,
     under `examples/erlang`.
-  - The name to supply as an argument to `application:start` to run the
-    application inside the Erlang shell (cf. [3.3](#COMMANDS)]).
+  - The name to supply as an argument to `application:ensure_all_started` to
+    run the application inside the Erlang shell (cf. [3.1](#INITIAL)).
 - The Erlang code source dirs are specified for completeness.  They are under
   `examples/erlang`.
 
-As mentioned in the paper (l.961), our example Erlang programs are *"minimal
+As mentioned in the paper, our example Erlang programs are *"minimal
 but functional skeleton programs for each role of each example to test the
 runtime I/O and event handling dynamics, and embedded MC mechanisms such as
 stale message purging. However, our minimal implementations do not necessarily
@@ -470,20 +538,20 @@ table from above.
     ```
     srv: Initializing with callback module srv
     srv initialized
-    *DBG* srv enter in state s1
+    *DBG* srv enter gen_srv in state s1
     *DBG* srv consume internal init_state in state s1
     alice: Initializing with callback module alice
     alice initialized
-    *DBG* alice enter in state s4
+    *DBG* alice enter gen_alice in state s4
     *DBG* alice consume internal init_state in state s4
     carol: Initializing with callback module carol
     carol initialized
-    *DBG* carol enter in state s1
+    *DBG* carol enter gen_carol in state s1
     *DBG* carol receive internal {first} in state s1
     *DBG* carol consume internal init_state in state s1
     Carol: s1 Sending first to Srv
-    *DBG* carol receive internal {second} in state s1
-    *DBG* srv receive cast {<0.145.0>,{first,1}} in state s1
+    *DBG* carol receive internal {second} in state s3
+    *DBG* srv receive cast {<0.159.0>,{first,{1}}} in state s1
     ```
 
 - &#8203;(2) **CircuitBreaker**
@@ -493,16 +561,16 @@ table from above.
     ```
     controller: Initializing with callback module controller
     controller initialized
-    *DBG* controller enter in state s1
+    *DBG* controller enter gen_controller in state s1
     *DBG* controller receive internal {start_storage} in state s1
     *DBG* controller consume internal init_state in state s1
     api: Initializing with callback module api
     api initialized
-    *DBG* api enter in state s1
+    *DBG* api enter gen_api in state s1
     *DBG* api consume internal init_state in state s1
     storage: Initializing with callback module storage
     storage initialized
-    *DBG* storage enter in state s1
+    *DBG* storage enter gen_storage in state s1
     ```
 
 - &#8203; (3) **DistributedLogging**
@@ -515,40 +583,48 @@ table from above.
     logs: Initializing with callback module logs
     logs initialized
     Controller: s1 Sending start_logging to Logs
-    Logs: s1 Received start_logging 0 from Controller <0.142.0>
+    Logs: s1 Received start_logging {0} from Controller <0.155.0>
+    Logs: s9 Sending log_failure to Controller
+    Controller: s9 Received log_failure {2} from Logs
+    Controller: s13 Sending restart_logging to Logs
+    Logs: s13 Received restart_logging {1} from Controller <0.155.0>
     Controller: s9 Sending timeout to Logs
     Logs: s9 Sending log_failure to Controller
-    Logs: s13 Received timeout from Controller <0.142.0>
+    gen_controller[s5]: Purging stale event {log_failure,{2}}
+    Logs: s13 Received timeout from Controller <0.155.0>
     Logs: s5 Sending ack to Controller
-    Controller: s6 Sending restart to Logs
-    Logs: s6 Received restart 1 from Controller <0.142.0>
-    Logs: s9 Sending log_success to Controller
-    Controller: s9 Received log_success 1 from Logs
     ```
 
-  5.  **Stop**: `application:stop(distributed_logging).` then `q().`.
+  The `Purging stale event` line shows the runtime discarding a message from
+  the branch of a mixed choice that was not taken (the GC column of Table 1);
+  how many appear varies from run to run.
+
+  To stop it: `application:stop(distributed_logging).` then `q().`.
 
 - &#8203; (4) **Fibonacci**
 
   **Expected output (abridged)**.
 
     ```
-      a: Initializing with callback module a
-      b is not available yet. Will retry...
-      a initialized
-      B: Initializing with callback module b
-      b initialized
-      A: s5 Sending fibonacci to b 1
-      *DBG* b enter in state s5
-      *DBG* b receive internal {error} in state s5
-      *DBG* b consume internal init_state in state s5
-      *DBG* b consume internal {error} in state s5
-      *DBG* b receive cast {<0.142.0>,{fibonacci,1},1} in state s5
-      *DBG* b receive internal {fibonacci} in state s5
-      *DBG* b consume cast {<0.142.0>,{fibonacci,1},1} in state s5 => s6
-      B: s6 Sending fibonacci 1 to a
-      A: s6 Received 1, next is 2
-      A: s5 Sending fibonacci to b 2
+    a: Initializing with callback module a
+    a initialized
+    *DBG* a enter gen_a in state s5
+    *DBG* a receive internal {fibonacci_1} in state s5
+    *DBG* a consume internal init_state in state s5
+    b: Initializing with callback module b
+    b initialized
+    A: s5 Sending fibonacci_1 1 to B
+    *DBG* b enter gen_b in state s5
+    *DBG* a consume internal {fibonacci_1} in state s5 => s6
+    *DBG* b receive internal {error} in state s5
+    *DBG* b consume internal init_state in state s5
+    *DBG* b consume internal {error} in state s5
+    *DBG* b receive cast {<0.155.0>,{fibonacci_1,{1}},[left]} in state s5
+    *DBG* b receive internal {fibonacci_2} in state s6
+    *DBG* b consume cast {<0.155.0>,{fibonacci_1,{1}},[left]} in state s5 => s6
+    B: s6 Sending fibonacci_2 1 to A
+    A: s6 Received fibonacci_2 1 from B, next is 1 (iter=1)
+    A: s5 Sending fibonacci_1 1 to B
     ```
 
 - &#8203; (5) **SMTP**
@@ -557,20 +633,18 @@ table from above.
     ```
     s: Initializing with callback module s
     s initialized
-    *DBG* s enter in state s1
+    *DBG* s enter gen_s in state s1
     *DBG* s receive internal {'220'} in state s1
     *DBG* s consume internal init_state in state s1
     s connected
     c is not available yet. Will retry...
     c: Initializing with callback module client
     c initialized
-    *DBG* client enter in state s1
+    *DBG* client enter gen_c in state s1
     *DBG* client consume internal init_state in state s1
-    S: s1 Sending 220 to C
-    *DBG* client receive cast {<0.142.0>,{'220'}} in state s1
-    *DBG* s receive internal {'Timeout'} in state s1
-    c connected
-    C: s1 Connected to S <0.142.0>
+    S: s1 Sending 220 to C <0.157.0>
+    *DBG* s receive internal {'Timeout'} in state s5
+    *DBG* client receive cast {<0.155.0>,{'220'}} in state s1
     *DBG* s consume internal {'220'} in state s1 => s5
     ```
 
@@ -580,18 +654,18 @@ table from above.
     ```
     alice: Initializing with callback module alice
     alice initialized
-    *DBG* alice enter in state s4
+    *DBG* alice enter gen_alice in state s4
     *DBG* alice receive internal {request_title} in state s4
     *DBG* alice consume internal init_state in state s4
     alice connected
     seller is not available yet. Will retry...
     bob: Initializing with callback module bob
     bob initialized
-    *DBG* bob enter in state s4
+    *DBG* bob enter gen_bob in state s4
     *DBG* bob consume internal init_state in state s4
     seller: Initializing with callback module seller
     seller initialized
-    *DBG* seller enter in state s5
+    *DBG* seller enter gen_seller in state s5
     ```
 
 - &#8203; (7) **TravelAgency**
@@ -600,18 +674,18 @@ table from above.
     ```
     client: Initializing with callback module client
     client initialized
-    *DBG* client enter in state s3
+    *DBG* client enter gen_client in state s3
     *DBG* client receive internal {booking_request} in state s3
     *DBG* client consume internal init_state in state s3
     client connected
     agency is not available yet. Will retry...
     supplier: Initializing with callback module supplier
     supplier initialized
-    *DBG* supplier enter in state s5
+    *DBG* supplier enter gen_supplier in state s5
     *DBG* supplier consume internal init_state in state s5
     agency: Initializing with callback module agency
     agency initialized
-    *DBG* agency enter in state s3
+    *DBG* agency enter gen_agency in state s3
     ```
 
 - &#8203; (8) **OnlineWallet**
@@ -620,11 +694,11 @@ table from above.
   ```
   a: Initializing with callback module a
   a initialized
-  *DBG* a enter in state s1
+  *DBG* a enter gen_a in state s1
   *DBG* a consume internal init_state in state s1
   c: Initializing with callback module client
   c initialized
-  *DBG* client enter in state s1
+  *DBG* client enter gen_c in state s1
   *DBG* client receive internal {login} in state s1
   *DBG* client consume internal init_state in state s1
   C: s1 Sending login to A
@@ -632,7 +706,7 @@ table from above.
   s is not available yet. Will retry...
   s: Initializing with callback module s
   s initialized
-  *DBG* s enter in state s1
+  *DBG* s enter gen_s in state s1
   ```
 
 
@@ -643,9 +717,20 @@ table from above.
 
 This section describes how to run the RabbitMQ case study mentioned in the paper. This example demonstrates the framework on a more complex, real-world protocol.
 
-For the RabbitMQ case study, we model the protocol followed by `amqp_selective_consumer` in `examples/scribble`.
-We generate the `gen_amqp_selective_consumer.erl` and `amqp_selective_consumer.erl` modules, fully implement them, then swap them into `rabbitmq-server/deps/amqp-client/src/`.
-To test, run `make` in `examples/erlang/rabbitmq-server`. This will build the server and run its tests. The build should complete without errors.
+For the RabbitMQ case study, we model the protocol followed by `amqp_selective_consumer` in `examples/scribble/amqp_selective_consumer.scr`.
+We generate the generic behaviour module for its `Consumer` role (`gen_consumer.erl`), fully implement the callback module as `amqp_selective_consumer.erl`, then swap them into `rabbitmq-server/deps/amqp_client/src/`.
+To run the selective-consumer tests inside the container:
+
+```sh
+cd examples/erlang/rabbitmq-server/deps/amqp_client
+gmake -j1 eunit
+```
+
+The same test is included in `./mMST.sh -run-erlang-examples`, which also tests
+each standalone OTP application.  (Running `make` in
+`examples/erlang/rabbitmq-server` builds the whole RabbitMQ server, but does
+not run these tests.)
+
 ---
 
 ## 4.2. <a name="ADDITIONAL"></a> Additional info about the examples
@@ -665,7 +750,7 @@ We give some quick pointers for doing so as appropriate for each example:
     - Erlang: state functions loop in `<role>.erl` via `gen_<role>.erl` callbacks invoking the same state upon `continue` events.
 - **MC** -- Mixed-choice.
     - Scribble: `mixed { ... } or A -> B { ... }` statements.
-    - Erlang: mixed-choice states encoded in the generic behaviour module with a mixed-choice counter; fresh messages (matching the counter) drive `gen_statem` transitions.
+    - Erlang: the generic behaviour module records, for each mixed choice it enters, which side (left or right) the role commits to. Messages sent inside a mixed choice carry the path of sides they were sent under, and a side is committed once the callback has taken a transition on it.
 - **nMC** -- non-directed MC.
     - Scribble: Mixed-choices of, e.g., the following form:
       ```
@@ -695,7 +780,7 @@ We give some quick pointers for doing so as appropriate for each example:
       ```
       While `B` sends message `3`, `A` may be concurrently sending message `1` -- message
       `1` will be implicitly purged by `B`'s runtime.
-    - Erlang: generic behaviour module compares per-message counters against state data and discards stale messages before dispatch.
+    - Erlang: before dispatching a message, the generic behaviour module compares its path with the sides the role has committed to. A message from a side that was not taken is discarded (`Purging stale event ...`); one that is not expected yet is postponed.
 
 
 
@@ -711,7 +796,7 @@ We give some quick pointers for doing so as appropriate for each example:
 
 ---
 
-# <a name="REUSABILITY"></a> 5. Resusability guide
+# <a name="REUSABILITY"></a> 5. Reusability guide
 
 ## 5.1. <a name="TUTORIAL"></a> TUTORIAL
 
@@ -719,7 +804,8 @@ Overview of how to write your own example.
 
 #### Protocol specification.
 
-We write a simple HelloWorld protocol.
+We write a simple HelloWorld protocol and save it as
+`examples/scribble/Hello.scr`.
 
 ```
     module Hello;  // Must match the file name, i.e., Hello.scr
@@ -758,14 +844,14 @@ We write a simple HelloWorld protocol.
   is our construct for mixed choice (MC).  Based on the theory in our paper,
   it specifies `B` as the "observer" of the MC.
 
-Other protocol constructs are inherited from based Scribble and can be seen by
+Other protocol constructs are inherited from base Scribble and can be seen by
 example.  E.g., Fibonacci is a simple example that demonstrates in addition
 to mixed-choices:
 
 - Protocol branches, e.g.,
   ```
   choice at a {
-      fibonacci(Num) from a to b;
+      fibonacci_1(Num) from a to b;
       ...
   } or {
       stop() from a to b;
@@ -788,8 +874,13 @@ The generated Erlang code consists of two modules for each role:
 - `gen_<role>.erl`: A generic behaviour module that enforces the protocol.
 - `<role>.erl`: A template callback module for the application logic.
 
-Once you’ve generated the `gen_<role>.erl` and `<role>.erl` modules for your protocol,
-copy them into your application’s `src/` directory (e.g. `cp ~/scribble-java/generated/MyProto/*.erl application/src/`).
+Generate the modules and copy them into your application's `src/` directory:
+
+```sh
+./mMST.sh -proto Proto1 examples/scribble/Hello.scr
+cp generated/Proto1/*.erl generated/Proto1/*.hrl application/src/
+```
+
 Then:
 1. Implement callbacks. Open each `<role>.erl` file and fill in the callback stubs (`s1`, ..., `sn`, `make_choice_`, etc.)
    with application logic. These callbacks will be invoked by the `gen_<role>` behaviour whenever messages arrive or internal
@@ -800,7 +891,7 @@ Then:
   ```
   rebar3 compile
   rebar3 shell
-  application:start(my_app).
+  application:ensure_all_started(my_app).
   ```
 For a practical walkthrough of OTP application structure and supervision trees, see the “Building OTP Applications” chapter
 on Learn You Some Erlang: https://learnyousomeerlang.com/otp-applications

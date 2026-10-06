@@ -21,7 +21,6 @@
 	]).
 
 -include("alice.hrl").
-%% state_data record is defined in alice.hrl (mc_path + peer pids).
 -type state_data() :: #state_data{}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.

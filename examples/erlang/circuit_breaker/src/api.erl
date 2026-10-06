@@ -39,7 +39,7 @@
 ]).
 
 -include("api.hrl").
--type state_data() :: #state_data{mc_path :: [atom()], storage_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{storage_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -51,7 +51,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("api initialized ~n", []),
     {ok, s1, Data}.
 

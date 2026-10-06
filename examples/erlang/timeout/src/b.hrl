@@ -2,6 +2,6 @@
 -ifndef(B_HRL).
 -define(B_HRL, true).
 
--record(state_data, {mc_path = [] :: [atom()], a_pid :: pid() | undefined, c_pid :: pid() | undefined}).
+-record(state_data, {a_pid :: pid() | undefined, c_pid :: pid() | undefined}).
 
 -endif.

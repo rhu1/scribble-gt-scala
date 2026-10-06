@@ -50,15 +50,15 @@
 -callback s3(internal, {ready}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {ready}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s5(cast, {pid(), {request}}, state_data()) -> {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s6(internal, {get_mode}, state_data()) -> {next_state, s11, state_data()} | {next_state, s11, state_data(), [{next_event, internal, {get_mode}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
--callback s8(internal, {timeout_notice}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-callback s8(internal, {timeout_notice}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {timeout_notice}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s11(internal | cast, {timeout} | {pid(), {error_notice}} | {pid(), {service_operational}} | {pid(), {shutdown_api}}, state_data()) -> {next_state, s12, state_data()} | {next_state, s18, state_data()} | {next_state, s23, state_data()} | {next_state, s8, state_data()} | {next_state, s12, state_data(), [{next_event, internal, {timeout}}] } | {next_state, s18, state_data(), [{next_event, internal, {timeout}}] } | {next_state, s23, state_data(), [{next_event, internal, {timeout}}] } | {next_state, s8, state_data(), [{next_event, internal, {timeout}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s12(internal, {ack}, state_data()) -> {next_state, s13, state_data()} | {next_state, s13, state_data(), [{next_event, internal, {ack}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s13(internal, {storage_request}, state_data()) -> {next_state, s14, state_data()} | {next_state, s14, state_data(), [{next_event, internal, {storage_request}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s14(cast, {pid(), {storage_reponse}}, state_data()) -> {next_state, s15, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
--callback s15(internal, {api_response}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-callback s15(internal, {api_response}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {api_response}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s18(internal, {error_ack}, state_data()) -> {next_state, s19, state_data()} | {next_state, s19, state_data(), [{next_event, internal, {error_ack}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s19(internal, {cancel_ack}, state_data()) -> {next_state, s20, state_data()} | {next_state, s20, state_data(), [{next_event, internal, {cancel_ack}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
--callback s20(internal, {error_response}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-callback s20(internal, {error_response}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {error_response}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s23(internal, {shutdown_ack}, state_data()) -> {next_state, s24, state_data()} | {next_state, s24, state_data(), [{next_event, internal, {shutdown_ack}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s24(internal, {prepare_shutdown}, state_data()) -> {next_state, s25, state_data()} | {next_state, s25, state_data(), [{next_event, internal, {prepare_shutdown}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 -callback s25(internal, {shutdown_user}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
@@ -83,18 +83,19 @@ callback_mode() -> state_functions.
 init({CallbackModule, _Args}) ->
     io:format("api: Initializing with callback module ~p~n", [CallbackModule]),
     put(callback_module, CallbackModule),
-    set_commit(#{}),
+    init_context(),
     CallbackModule:init([]).
 
 %% ---------- State functions----------
 -spec s1(cast, {pid(), {start_controller}}, state_data()) -> {next_state, s3, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 s1(cast, {ControllerPid, {start_controller}}, Data) ->
     CallbackModule = get(callback_module),
-    try CallbackModule:s1(cast, {ControllerPid, {start_controller}}, Data)
-    catch error:function_clause ->
-      io:format("gen_api[s1]: Callback had no clause for ~p, ignoring~n", [{start_controller}]),
-      {keep_state, Data}
-    end;
+    Next = try CallbackModule:s1(cast, {ControllerPid, {start_controller}}, Data)
+           catch error:function_clause ->
+             io:format("gen_api[s1]: Callback had no clause for ~p, ignoring~n", [{start_controller}]),
+             {keep_state, Data}
+           end,
+    after_transition(Next);
 s1(cast, {_From, _Msg, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -109,7 +110,7 @@ s1(cast, {_From, _Msg, Path}, Data) ->
 s3(internal, {ready}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s3(internal, {ready}, Data),
-        Next;
+    after_transition(Next);
 s3(cast, {_From, _Msg, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -120,66 +121,22 @@ s3(cast, {_From, _Msg, Path}, Data) ->
         {keep_state, Data, [postpone]}
     end.
 
--spec s5(cast, {pid(), {request}, list()}, state_data()) -> {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s5(cast, {UsrPid, {request}, Path}, Data) ->
+-spec s5(cast, {pid(), {request}}, state_data()) -> {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
+s5(cast, {UsrPid, {request}}, Data) ->
+    CallbackModule = get(callback_module),
+    Next = try CallbackModule:s5(cast, {UsrPid, {request}}, Data)
+           catch error:function_clause ->
+             io:format("gen_api[s5]: Callback had no clause for ~p, ignoring~n", [{request}]),
+             {keep_state, Data}
+           end,
+    after_transition(Next);
+s5(cast, {_From, _Msg, Path}, Data) ->
     case stale(Path) of
       true ->
-        io:format("gen_api[s5]: Purging stale event ~p~n", [{request}]),
+        io:format("gen_api[s5]: Purging stale early-path event ~p~n", [_Msg]),
         {keep_state, Data};
       false ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s5(cast, {UsrPid, {request}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_api[s5]: Callback had no clause for ~p, postponing~n", [{request}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> Next
-        end
-    end;
-s5(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s5]: Purging stale event ~p~n", [{start_controller}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s5]: Postponing event ~p~n", [{start_controller}]),
-        {keep_state, Data, [postpone]}
-    end;
-s5(cast, {_ControllerPid, {error_notice}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s5]: Purging stale event ~p~n", [{error_notice}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s5]: Postponing event ~p~n", [{error_notice}]),
-        {keep_state, Data, [postpone]}
-    end;
-s5(cast, {_ControllerPid, {shutdown_api}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s5]: Purging stale event ~p~n", [{shutdown_api}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s5]: Postponing event ~p~n", [{shutdown_api}]),
-        {keep_state, Data, [postpone]}
-    end;
-s5(cast, {_ControllerPid, {service_operational}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s5]: Purging stale event ~p~n", [{service_operational}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s5]: Postponing event ~p~n", [{service_operational}]),
-        {keep_state, Data, [postpone]}
-    end;
-s5(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s5]: Purging stale event ~p~n", [{storage_reponse}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s5]: Postponing event ~p~n", [{storage_reponse}]),
+        io:format("gen_api[s5]: Postponing early-path event ~p~n", [_Msg]),
         {keep_state, Data, [postpone]}
     end.
 
@@ -187,67 +144,22 @@ s5(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s6(internal, {get_mode}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s6(internal, {get_mode}, Data),
-        Next;
-s6(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
+    after_transition(Next);
+s6(cast, {_From, _Msg, Path}, Data) ->
     case stale(Path) of
       true ->
-        io:format("gen_api[s6]: Purging stale event ~p~n", [{start_controller}]),
+        io:format("gen_api[s6]: Purging stale early-path event ~p~n", [_Msg]),
         {keep_state, Data};
       false ->
-        io:format("gen_api[s6]: Postponing event ~p~n", [{start_controller}]),
-        {keep_state, Data, [postpone]}
-    end;
-s6(cast, {_UsrPid, {request}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s6]: Purging stale event ~p~n", [{request}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s6]: Postponing event ~p~n", [{request}]),
-        {keep_state, Data, [postpone]}
-    end;
-s6(cast, {_ControllerPid, {error_notice}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s6]: Purging stale event ~p~n", [{error_notice}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s6]: Postponing event ~p~n", [{error_notice}]),
-        {keep_state, Data, [postpone]}
-    end;
-s6(cast, {_ControllerPid, {shutdown_api}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s6]: Purging stale event ~p~n", [{shutdown_api}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s6]: Postponing event ~p~n", [{shutdown_api}]),
-        {keep_state, Data, [postpone]}
-    end;
-s6(cast, {_ControllerPid, {service_operational}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s6]: Purging stale event ~p~n", [{service_operational}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s6]: Postponing event ~p~n", [{service_operational}]),
-        {keep_state, Data, [postpone]}
-    end;
-s6(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s6]: Purging stale event ~p~n", [{storage_reponse}]),
-        {keep_state, Data};
-      false ->
-        io:format("gen_api[s6]: Postponing event ~p~n", [{storage_reponse}]),
+        io:format("gen_api[s6]: Postponing early-path event ~p~n", [_Msg]),
         {keep_state, Data, [postpone]}
     end.
 
--spec s8(internal, {timeout_notice}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-spec s8(internal, {timeout_notice}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {timeout_notice}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 s8(internal, {timeout_notice}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s8(internal, {timeout_notice}, Data),
-        Next;
+    after_transition(Next);
 s8(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -305,36 +217,12 @@ s8(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 
 %% Mixed-choice entry state
 -spec s11(internal | cast, {timeout} | {pid(), {error_notice}, list()} | {pid(), {shutdown_api}, list()} | {pid(), {service_operational}, list()}, state_data()) -> {next_state, s12, state_data()} | {next_state, s18, state_data()} | {next_state, s23, state_data()} | {next_state, s8, state_data()} | {next_state, s12, state_data(), [{next_event, internal, {timeout}}] } | {next_state, s18, state_data(), [{next_event, internal, {timeout}}] } | {next_state, s23, state_data(), [{next_event, internal, {timeout}}] } | {next_state, s8, state_data(), [{next_event, internal, {timeout}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
-s11(internal, {timeout}, Data) ->
-    CallbackModule = get(callback_module),
-    Next = CallbackModule:s11(internal, {timeout}, Data),
-        Next;
-s11(cast, {ControllerPid, {shutdown_api}, Path}, Data) ->
-    case stale(Path) of
-      true ->
-        io:format("gen_api[s11]: Purging stale event ~p~n", [{shutdown_api}]),
-        {keep_state, Data};
-      false ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s11(cast, {ControllerPid, {shutdown_api}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_api[s11]: Callback had no clause for ~p, postponing~n", [{shutdown_api}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          {next_state, s8, _} -> commit_entry(mc1, right), Next;
-          {next_state, s8, _, _} -> commit_entry(mc1, right), Next;
-          {next_state, s12, _} -> commit_entry(mc1, left), Next;
-          {next_state, s12, _, _} -> commit_entry(mc1, left), Next;
-          _ -> Next
-        end
-    end;
 s11(cast, {ControllerPid, {service_operational}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, left)) of
+      stale ->
         io:format("gen_api[s11]: Purging stale event ~p~n", [{service_operational}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s11(cast, {ControllerPid, {service_operational}}, Data)
                catch error:function_clause ->
@@ -342,19 +230,49 @@ s11(cast, {ControllerPid, {service_operational}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          {next_state, s8, _} -> commit_entry(mc1, right), Next;
-          {next_state, s8, _, _} -> commit_entry(mc1, right), Next;
-          {next_state, s12, _} -> commit_entry(mc1, left), Next;
-          {next_state, s12, _, _} -> commit_entry(mc1, left), Next;
-          _ -> Next
-        end
+          {next_state, s8, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s8, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s12, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s12, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_api[s11]: Postponing not-ready event ~p~n", [{service_operational}]),
+        {keep_state, Data, [postpone]}
+    end;
+s11(internal, {timeout}, Data) ->
+    CallbackModule = get(callback_module),
+    Next = CallbackModule:s11(internal, {timeout}, Data),
+    after_transition(Next);
+s11(cast, {ControllerPid, {shutdown_api}, Path}, Data) ->
+    case message_status(Path, branch_path(mc1, left)) of
+      stale ->
+        io:format("gen_api[s11]: Purging stale event ~p~n", [{shutdown_api}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s11(cast, {ControllerPid, {shutdown_api}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_api[s11]: Callback had no clause for ~p, postponing~n", [{shutdown_api}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s8, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s8, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s23, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s23, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_api[s11]: Postponing not-ready event ~p~n", [{shutdown_api}]),
+        {keep_state, Data, [postpone]}
     end;
 s11(cast, {ControllerPid, {error_notice}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, branch_path(mc1, left)) of
+      stale ->
         io:format("gen_api[s11]: Purging stale event ~p~n", [{error_notice}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s11(cast, {ControllerPid, {error_notice}}, Data)
                catch error:function_clause ->
@@ -362,12 +280,15 @@ s11(cast, {ControllerPid, {error_notice}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          {next_state, s8, _} -> commit_entry(mc1, right), Next;
-          {next_state, s8, _, _} -> commit_entry(mc1, right), Next;
-          {next_state, s12, _} -> commit_entry(mc1, left), Next;
-          {next_state, s12, _, _} -> commit_entry(mc1, left), Next;
-          _ -> Next
-        end
+          {next_state, s8, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s8, _, _} -> after_transition(commit_if_taken(Next, mc1, right));
+          {next_state, s18, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s18, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_api[s11]: Postponing not-ready event ~p~n", [{error_notice}]),
+        {keep_state, Data, [postpone]}
     end;
 s11(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
@@ -401,7 +322,7 @@ s11(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s12(internal, {ack}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s12(internal, {ack}, Data),
-        Next;
+    after_transition(Next);
 s12(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -461,7 +382,7 @@ s12(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s13(internal, {storage_request}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s13(internal, {storage_request}, Data),
-        Next;
+    after_transition(Next);
 s13(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -519,11 +440,11 @@ s13(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 
 -spec s14(cast, {pid(), {storage_reponse}, list()}, state_data()) -> {next_state, s15, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
 s14(cast, {StoragePid, {storage_reponse}, Path}, Data) ->
-    case stale(Path) of
-      true ->
+    case message_status(Path, current_path()) of
+      stale ->
         io:format("gen_api[s14]: Purging stale event ~p~n", [{storage_reponse}]),
         {keep_state, Data};
-      false ->
+      ready ->
         CallbackModule = get(callback_module),
         Next = try CallbackModule:s14(cast, {StoragePid, {storage_reponse}}, Data)
                catch error:function_clause ->
@@ -531,8 +452,11 @@ s14(cast, {StoragePid, {storage_reponse}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          _ -> Next
-        end
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_api[s14]: Postponing not-ready event ~p~n", [{storage_reponse}]),
+        {keep_state, Data, [postpone]}
     end;
 s14(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
@@ -580,11 +504,11 @@ s14(cast, {_ControllerPid, {service_operational}, Path}, Data) ->
         {keep_state, Data, [postpone]}
     end.
 
--spec s15(internal, {api_response}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-spec s15(internal, {api_response}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {api_response}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 s15(internal, {api_response}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s15(internal, {api_response}, Data),
-        Next;
+    after_transition(Next);
 s15(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -644,7 +568,7 @@ s15(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s18(internal, {error_ack}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s18(internal, {error_ack}, Data),
-        Next;
+    after_transition(Next);
 s18(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -704,7 +628,7 @@ s18(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s19(internal, {cancel_ack}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s19(internal, {cancel_ack}, Data),
-        Next;
+    after_transition(Next);
 s19(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -760,11 +684,11 @@ s19(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
         {keep_state, Data, [postpone]}
     end.
 
--spec s20(internal, {error_response}, state_data()) -> {keep_state, state_data()} | {stop, normal, state_data()}.
+-spec s20(internal, {error_response}, state_data()) -> {next_state, s5, state_data()} | {next_state, s5, state_data(), [{next_event, internal, {error_response}}] } | {keep_state, state_data()} | {stop, normal, state_data()}.
 s20(internal, {error_response}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s20(internal, {error_response}, Data),
-        Next;
+    after_transition(Next);
 s20(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -824,7 +748,7 @@ s20(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s23(internal, {shutdown_ack}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s23(internal, {shutdown_ack}, Data),
-        Next;
+    after_transition(Next);
 s23(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -884,7 +808,7 @@ s23(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s24(internal, {prepare_shutdown}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s24(internal, {prepare_shutdown}, Data),
-        Next;
+    after_transition(Next);
 s24(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -944,7 +868,7 @@ s24(cast, {_StoragePid, {storage_reponse}, Path}, Data) ->
 s25(internal, {shutdown_user}, Data) ->
     CallbackModule = get(callback_module),
     Next = CallbackModule:s25(internal, {shutdown_user}, Data),
-        Next;
+    after_transition(Next);
 s25(cast, {_ControllerPid, {start_controller}, Path}, Data) ->
     case stale(Path) of
       true ->
@@ -1010,8 +934,7 @@ send_s3_ready(UsrPid, _Data) ->
 
 -spec send_s6_get_mode(ControllerPid :: pid(), _Data :: state_data()) -> ok.
 send_s6_get_mode(ControllerPid, _Data) ->
-    Path = current_path(),
-    gen_statem:cast(ControllerPid, {self(), {get_mode}, Path}).
+    gen_statem:cast(ControllerPid, {self(), {get_mode}}).
 
 
 -spec send_s8_timeout_notice(UsrPid :: pid(), _Data :: state_data()) -> ok.
@@ -1022,7 +945,8 @@ send_s8_timeout_notice(UsrPid, _Data) ->
 
 -spec send_s11_timeout(ControllerPid :: pid(), _Data :: state_data()) -> ok.
 send_s11_timeout(ControllerPid, _Data) ->
-    Path = current_path(),
+    Path = branch_path(mc1, right),
+    commit_current(mc1, right),
     gen_statem:cast(ControllerPid, {self(), {timeout}, Path}).
 
 
@@ -1091,36 +1015,73 @@ terminate(_Reason, _State, _StateData) ->
     ok.
 
 
-%% ---------- GC / commitment helpers (per-mixed-choice side) ----------
-%% We track, per MC id, which side this role is committed to: left | right.
-%% Uncommitted MCs have no entry.
 get_commit() -> case get(commit_map) of undefined -> #{}; M -> M end.
 set_commit(M) -> put(commit_map, M), M.
 
--spec commit_entry(atom(), left | right) -> map().
-commit_entry(McId, Side) when Side =:= left; Side =:= right ->
-    set_commit(maps:put(McId, Side, get_commit())).
+init_context() ->
+    set_current_path([]),
+    set_commit(#{}),
+    ok.
 
-%% Staleness follows Section 4.1: a message is stale if, for some MC on its Path,
-%% following the Path hits a stale side (i.e., we are committed to the opposite side).
-%% We approximate local type commitment using the commit_map.
+-spec current_path() -> [left | right].
+current_path() -> case get(mc_path) of undefined -> []; Path -> Path end.
 
--spec stale([{atom(), left | right}]) -> boolean().
-stale(Path) when is_list(Path) ->
-    Commit = get_commit(),
-    lists:any(
-      fun({Mc, MsgSide}) ->
-        case maps:find(Mc, Commit) of
-          error -> false; %% not committed => nothing is stale for this MC
-          {ok, LocalSide} -> LocalSide =/= MsgSide
+set_current_path(Path) -> put(mc_path, Path), Path.
+
+enter_mc(McId) ->
+    Prefix = current_path(),
+    set_commit(maps:put(Prefix, {McId, none}, get_commit())),
+    ok.
+
+active_prefix(McId) ->
+    Current = current_path(),
+    Candidates = lists:filtermap(
+      fun({Prefix, {FrameMc, _Side}}) ->
+        case FrameMc =:= McId andalso lists:prefix(Prefix, Current) of
+          true -> {true, {length(Prefix), Prefix}};
+          false -> false
         end
-      end, Path).
+      end, maps:to_list(get_commit())),
+    case Candidates of
+      [] -> error({missing_mixed_choice, McId, Current});
+      _ -> element(2, lists:max(Candidates))
+    end.
+
+branch_path(McId, Side) when Side =:= left; Side =:= right ->
+    active_prefix(McId) ++ [Side].
+
+commit_current(McId, Side) when Side =:= left; Side =:= right ->
+    Prefix = active_prefix(McId),
+    set_commit(maps:put(Prefix, {McId, Side}, get_commit())),
+    set_current_path(Prefix ++ [Side]),
+    ok.
 
 
-%% current_path/0 is used only to annotate outgoing messages with the sender's
-%% current MC context, when this role is inside an active mixed-choice region.
--spec current_path() -> [{atom(), left | right}].
-current_path() ->
-    Commit = get_commit(),
-    lists:sort(maps:to_list(Commit)).
+commit_if_taken(Next, McId, Side) ->
+    case Next of
+      {keep_state, _} -> Next;
+      {keep_state, _, _} -> Next;
+      _ -> commit_current(McId, Side), Next
+    end.
+
+after_transition({next_state, s11, _} = Next) -> enter_mc(mc1), Next;
+after_transition({next_state, s11, _, _} = Next) -> enter_mc(mc1), Next;
+after_transition(Next) -> Next.
+
+message_status(Path, Expected) ->
+    case stale(Path) of
+      true -> stale;
+      false when Path =:= Expected -> ready;
+      false -> not_ready
+    end.
+
+-spec stale([left | right]) -> boolean().
+stale(Path) when is_list(Path) -> stale(Path, [], get_commit()).
+
+stale([], _Prefix, _Frames) -> false;
+stale([Side | Rest], Prefix, Frames) ->
+    case maps:find(Prefix, Frames) of
+      {ok, {_McId, Commit}} when Commit =/= none, Commit =/= Side -> true;
+      _ -> stale(Rest, Prefix ++ [Side], Frames)
+    end.
 

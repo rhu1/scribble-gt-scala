@@ -12,7 +12,7 @@
 -export([init/1, callback_mode/0, start_link/0, s1/3, s3/3, s8/3, s9/3, s12/3, s15/3]).
 
 -include("storage.hrl").
--type state_data() :: #state_data{mc_path :: [atom()], api_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
+-type state_data() :: #state_data{api_pid :: pid() | undefined, usr_pid :: pid() | undefined, controller_pid :: pid() | undefined}.
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -24,7 +24,7 @@ callback_mode() ->
 
 -spec init(list()) -> {ok, s1, state_data()}.
 init([]) ->
-    Data = #state_data{mc_path = []},
+    Data = #state_data{},
     io:format("storage initialized ~n", []),
     {ok, s1, Data}.
 
