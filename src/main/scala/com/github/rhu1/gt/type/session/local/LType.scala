@@ -562,13 +562,10 @@ case class LRec(rvar: RecVar, body: LType) extends LType {
     /* ... */
 
     override def construct(r: Role, com: Map[Mid, Set[Op]], recvStars: Map[Mid, (GTVRecv, GTVState)],
-                           c: Mid, s: GTVState, end: GTVState): EFSM = {
-        // Mark this recursion variable as active in the state metadata, but
-        // delegate to the body so we actually build the loop body EFSM.
+                           c: Mid, s: GTVState, end: GTVState): EFSM =
         val recvars = s.recvars.asScala + LType.convertRecVar(this.rvar)  // !!! GTVState Java unmodifiable
         val s1 = new GTVState(s.isEntry, c, recvars.asJava)
-        body.construct(r, com, recvStars, c, s1, end)
-    }
+        this.body.construct(r, com, recvStars, c, s1, end)
 
     /* ... */
 
@@ -658,3 +655,4 @@ case class EFSM(
         val delta = this.delta.map { case ((s, e), v) => (new Pair(s, e), v.map((a, s1) => new Pair(a, s1)).asJava) }.asJava
         new GTEFSM(S, this.init, E, A, delta)
 }
+
