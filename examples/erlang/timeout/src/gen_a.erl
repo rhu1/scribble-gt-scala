@@ -143,25 +143,6 @@ s5(cast, {_CPid, {a5}, Path}, Data) ->
     end.
 
 -spec s6(cast, {pid(), {a4}, list()} | {pid(), {'TOa'}, list()}, state_data()) -> {next_state, s7, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s6(cast, {BPid, {a4}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_a[s6]: Purging stale event ~p~n", [{a4}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s6(cast, {BPid, {a4}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_a[s6]: Callback had no clause for ~p, postponing~n", [{a4}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_a[s6]: Postponing not-ready event ~p~n", [{a4}]),
-        {keep_state, Data, [postpone]}
-    end;
 s6(cast, {BPid, {'TOa'}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -180,6 +161,27 @@ s6(cast, {BPid, {'TOa'}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_a[s6]: Postponing not-ready event ~p~n", [{'TOa'}]),
+        {keep_state, Data, [postpone]}
+    end;
+s6(cast, {BPid, {a4}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_a[s6]: Purging stale event ~p~n", [{a4}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s6(cast, {BPid, {a4}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_a[s6]: Callback had no clause for ~p, postponing~n", [{a4}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s7, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s7, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_a[s6]: Postponing not-ready event ~p~n", [{a4}]),
         {keep_state, Data, [postpone]}
     end;
 s6(cast, {_CPid, {a5}, Path}, Data) ->

@@ -65,8 +65,8 @@ s4(cast, {APid, {a2}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
-          {next_state, s5, _} -> after_transition(commit_if_taken(Next, mc1, left));
-          {next_state, s5, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s5, _} -> after_transition(speculate_if_taken(Next, mc1, left));
+          {next_state, s5, _, _} -> after_transition(speculate_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -117,6 +117,8 @@ s5(cast, {BPid, {a3}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -261,6 +263,13 @@ commit_if_taken(Next, McId, Side) ->
       {keep_state, _} -> Next;
       {keep_state, _, _} -> Next;
       _ -> commit_current(McId, Side), Next
+    end.
+
+speculate_if_taken(Next, McId, Side) ->
+    case Next of
+      {keep_state, _} -> Next;
+      {keep_state, _, _} -> Next;
+      _ -> set_current_path(branch_path(McId, Side)), Next
     end.
 
 after_transition({next_state, s4, _} = Next) -> enter_mc(mc1), Next;

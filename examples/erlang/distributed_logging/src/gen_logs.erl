@@ -311,6 +311,8 @@ s10(cast, {ControllerPid, {success_ack}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s9, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s9, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -376,25 +378,6 @@ s10(cast, {_ControllerPid, {stop_logging, {Int}}, Path}, Data) ->
     end.
 
 -spec s13(cast, {pid(), {restart_logging, {term()}}, list()} | {pid(), {stop_logging, {term()}}, list()} | {pid(), {timeout}, list()}, state_data()) -> {next_state, s5, state_data()} | {next_state, s9, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s13(cast, {ControllerPid, {restart_logging, {Int}}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_logs[s13]: Purging stale event ~p~n", [{restart_logging, {Int}}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s13(cast, {ControllerPid, {restart_logging, {Int}}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_logs[s13]: Callback had no clause for ~p, postponing~n", [{restart_logging, {Int}}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_logs[s13]: Postponing not-ready event ~p~n", [{restart_logging, {Int}}]),
-        {keep_state, Data, [postpone]}
-    end;
 s13(cast, {ControllerPid, {stop_logging, {Int}}, Path}, Data) ->
     case message_status(Path, current_path()) of
       stale ->
@@ -408,10 +391,32 @@ s13(cast, {ControllerPid, {stop_logging, {Int}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {stop, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
         io:format("gen_logs[s13]: Postponing not-ready event ~p~n", [{stop_logging, {Int}}]),
+        {keep_state, Data, [postpone]}
+    end;
+s13(cast, {ControllerPid, {restart_logging, {Int}}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_logs[s13]: Purging stale event ~p~n", [{restart_logging, {Int}}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s13(cast, {ControllerPid, {restart_logging, {Int}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_logs[s13]: Callback had no clause for ~p, postponing~n", [{restart_logging, {Int}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s9, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s9, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_logs[s13]: Postponing not-ready event ~p~n", [{restart_logging, {Int}}]),
         {keep_state, Data, [postpone]}
     end;
 s13(cast, {ControllerPid, {timeout}, Path}, Data) ->

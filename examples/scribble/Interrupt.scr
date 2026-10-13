@@ -1,12 +1,12 @@
 module Interrupt;
 
 
-////* Fig. 7
+////* Fig. 8
 global protocol Interrupt(role P, role Q) {
     mixed { // LHS
         Start() from P to Q;  // c
         choice at P {
-            rec X {  // !!! XXX Fig. 7 wrong order
+            rec X {  // !!! XXX Fig. 8 wrong order
                 More() from P to Q;  // a
                 continue X;
             }

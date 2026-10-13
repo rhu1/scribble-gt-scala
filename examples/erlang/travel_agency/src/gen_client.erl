@@ -363,6 +363,8 @@ s10(cast, {AgencyPid, {accept_confirmation}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s11, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s11, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -583,6 +585,8 @@ s14(cast, {AgencyPid, {reject_confirmation}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s15, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s15, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -729,6 +733,8 @@ s17(cast, {AgencyPid, {repeat_confirmation}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s18, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s18, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->

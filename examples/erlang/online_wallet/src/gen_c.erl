@@ -203,6 +203,27 @@ s8(cast, {_SPid, {quit_ack}, Path}, Data) ->
     end.
 
 -spec s9(cast, {pid(), {confirmation}, list()} | {pid(), {timeout}, list()}, state_data()) -> {next_state, s10, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
+s9(cast, {SPid, {confirmation}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_c[s9]: Purging stale event ~p~n", [{confirmation}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s9(cast, {SPid, {confirmation}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_c[s9]: Callback had no clause for ~p, postponing~n", [{confirmation}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s10, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s10, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_c[s9]: Postponing not-ready event ~p~n", [{confirmation}]),
+        {keep_state, Data, [postpone]}
+    end;
 s9(cast, {SPid, {timeout}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -221,25 +242,6 @@ s9(cast, {SPid, {timeout}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_c[s9]: Postponing not-ready event ~p~n", [{timeout}]),
-        {keep_state, Data, [postpone]}
-    end;
-s9(cast, {SPid, {confirmation}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_c[s9]: Purging stale event ~p~n", [{confirmation}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s9(cast, {SPid, {confirmation}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_c[s9]: Callback had no clause for ~p, postponing~n", [{confirmation}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_c[s9]: Postponing not-ready event ~p~n", [{confirmation}]),
         {keep_state, Data, [postpone]}
     end;
 s9(cast, {_APid, {login_failed}, Path}, Data) ->
@@ -381,6 +383,8 @@ s13(cast, {SPid, {quit_ack}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s14, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s14, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->

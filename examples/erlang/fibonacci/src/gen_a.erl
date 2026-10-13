@@ -135,6 +135,8 @@ s6(cast, {BPid, {fibonacci_2, {Num}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s5, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s5, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -185,6 +187,7 @@ s9(cast, {BPid, {ack}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {stop, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->

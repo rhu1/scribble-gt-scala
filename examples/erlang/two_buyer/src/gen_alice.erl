@@ -132,6 +132,8 @@ s5(cast, {SellerPid, {price_quote, {Price}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc2, left));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc2, left));
           _ -> after_transition(Next)
         end;
       not_ready ->

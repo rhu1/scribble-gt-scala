@@ -199,6 +199,7 @@ s10(cast, {QPid, {'Ack'}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {stop, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->

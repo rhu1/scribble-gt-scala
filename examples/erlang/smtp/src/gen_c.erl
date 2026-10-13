@@ -252,6 +252,27 @@ s5(cast, {_SPid, {'AckCommit'}, Path}, Data) ->
     end.
 
 -spec s6(cast, {pid(), {'EhloCommit'}, list()} | {pid(), {'Timeout'}, list()}, state_data()) -> {next_state, s8, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
+s6(cast, {SPid, {'EhloCommit'}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_c[s6]: Purging stale event ~p~n", [{'EhloCommit'}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s6(cast, {SPid, {'EhloCommit'}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_c[s6]: Callback had no clause for ~p, postponing~n", [{'EhloCommit'}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s8, _} -> after_transition(commit_if_taken(Next, mc2, left));
+          {next_state, s8, _, _} -> after_transition(commit_if_taken(Next, mc2, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_c[s6]: Postponing not-ready event ~p~n", [{'EhloCommit'}]),
+        {keep_state, Data, [postpone]}
+    end;
 s6(cast, {SPid, {'Timeout'}, Path}, Data) ->
     case message_status(Path, branch_path(mc2, right)) of
       stale ->
@@ -270,25 +291,6 @@ s6(cast, {SPid, {'Timeout'}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_c[s6]: Postponing not-ready event ~p~n", [{'Timeout'}]),
-        {keep_state, Data, [postpone]}
-    end;
-s6(cast, {SPid, {'EhloCommit'}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_c[s6]: Purging stale event ~p~n", [{'EhloCommit'}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s6(cast, {SPid, {'EhloCommit'}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_c[s6]: Callback had no clause for ~p, postponing~n", [{'EhloCommit'}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_c[s6]: Postponing not-ready event ~p~n", [{'EhloCommit'}]),
         {keep_state, Data, [postpone]}
     end;
 s6(cast, {_SPid, {'220'}, Path}, Data) ->
@@ -1947,6 +1949,27 @@ s33(cast, {_SPid, {'AckCommit'}, Path}, Data) ->
     end.
 
 -spec s34(cast, {pid(), {'Timeout'}, list()} | {pid(), {'354'}, list()}, state_data()) -> {next_state, s36, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
+s34(cast, {SPid, {'354'}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_c[s34]: Purging stale event ~p~n", [{'354'}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s34(cast, {SPid, {'354'}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_c[s34]: Callback had no clause for ~p, postponing~n", [{'354'}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s36, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s36, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_c[s34]: Postponing not-ready event ~p~n", [{'354'}]),
+        {keep_state, Data, [postpone]}
+    end;
 s34(cast, {SPid, {'Timeout'}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -1965,25 +1988,6 @@ s34(cast, {SPid, {'Timeout'}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_c[s34]: Postponing not-ready event ~p~n", [{'Timeout'}]),
-        {keep_state, Data, [postpone]}
-    end;
-s34(cast, {SPid, {'354'}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_c[s34]: Purging stale event ~p~n", [{'354'}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s34(cast, {SPid, {'354'}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_c[s34]: Callback had no clause for ~p, postponing~n", [{'354'}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_c[s34]: Postponing not-ready event ~p~n", [{'354'}]),
         {keep_state, Data, [postpone]}
     end;
 s34(cast, {_SPid, {'220'}, Path}, Data) ->
@@ -2753,6 +2757,7 @@ s53(cast, {SPid, {'AckCommit'}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {stop, _, _} -> after_transition(commit_if_taken(Next, mc2, left));
           _ -> after_transition(Next)
         end;
       not_ready ->

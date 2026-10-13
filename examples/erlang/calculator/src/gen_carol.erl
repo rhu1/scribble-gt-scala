@@ -204,6 +204,8 @@ s8(cast, {SrvPid, {result_sum, {Result}}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s9, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s9, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -283,25 +285,6 @@ s9(cast, {_SrvPid, {result_diff, {Result}}, Path}, Data) ->
     end.
 
 -spec s11(cast, {pid(), {timeout}, list()} | {pid(), {result_diff, {term()}}, list()}, state_data()) -> {next_state, s12, state_data()} | {next_state, s5, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s11(cast, {SrvPid, {result_diff, {Result}}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_carol[s11]: Purging stale event ~p~n", [{result_diff, {Result}}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s11(cast, {SrvPid, {result_diff, {Result}}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_carol[s11]: Callback had no clause for ~p, postponing~n", [{result_diff, {Result}}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_carol[s11]: Postponing not-ready event ~p~n", [{result_diff, {Result}}]),
-        {keep_state, Data, [postpone]}
-    end;
 s11(cast, {SrvPid, {timeout}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -321,6 +304,27 @@ s11(cast, {SrvPid, {timeout}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_carol[s11]: Postponing not-ready event ~p~n", [{timeout}]),
+        {keep_state, Data, [postpone]}
+    end;
+s11(cast, {SrvPid, {result_diff, {Result}}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_carol[s11]: Purging stale event ~p~n", [{result_diff, {Result}}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s11(cast, {SrvPid, {result_diff, {Result}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_carol[s11]: Callback had no clause for ~p, postponing~n", [{result_diff, {Result}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s12, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s12, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_carol[s11]: Postponing not-ready event ~p~n", [{result_diff, {Result}}]),
         {keep_state, Data, [postpone]}
     end;
 s11(cast, {_SrvPid, {result_sum, {Result}}, Path}, Data) ->

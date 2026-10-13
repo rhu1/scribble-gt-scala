@@ -290,25 +290,6 @@ s11(cast, {_APIPid, {shutdown_ack}, Path}, Data) ->
     end.
 
 -spec s12(cast, {pid(), {ack}, list()} | {pid(), {timeout}, list()}, state_data()) -> {next_state, s6, state_data()} | {next_state, s8, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s12(cast, {APIPid, {ack}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_controller[s12]: Purging stale event ~p~n", [{ack}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s12(cast, {APIPid, {ack}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_controller[s12]: Callback had no clause for ~p, postponing~n", [{ack}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_controller[s12]: Postponing not-ready event ~p~n", [{ack}]),
-        {keep_state, Data, [postpone]}
-    end;
 s12(cast, {APIPid, {timeout}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -328,6 +309,27 @@ s12(cast, {APIPid, {timeout}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_controller[s12]: Postponing not-ready event ~p~n", [{timeout}]),
+        {keep_state, Data, [postpone]}
+    end;
+s12(cast, {APIPid, {ack}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_controller[s12]: Purging stale event ~p~n", [{ack}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s12(cast, {APIPid, {ack}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_controller[s12]: Callback had no clause for ~p, postponing~n", [{ack}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_controller[s12]: Postponing not-ready event ~p~n", [{ack}]),
         {keep_state, Data, [postpone]}
     end;
 s12(cast, {_StoragePid, {hard_ping}, Path}, Data) ->
@@ -381,6 +383,8 @@ s15(cast, {APIPid, {error_ack}, Path}, Data) ->
                  {keep_state, Data, [postpone]}
                end,
         case Next of
+          {next_state, s16, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s16, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
           _ -> after_transition(Next)
         end;
       not_ready ->
@@ -514,25 +518,6 @@ s16(cast, {_APIPid, {shutdown_ack}, Path}, Data) ->
     end.
 
 -spec s19(cast, {pid(), {timeout}, list()} | {pid(), {shutdown_ack}, list()}, state_data()) -> {next_state, s20, state_data()} | {next_state, s8, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
-s19(cast, {APIPid, {shutdown_ack}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_controller[s19]: Purging stale event ~p~n", [{shutdown_ack}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s19(cast, {APIPid, {shutdown_ack}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_controller[s19]: Callback had no clause for ~p, postponing~n", [{shutdown_ack}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_controller[s19]: Postponing not-ready event ~p~n", [{shutdown_ack}]),
-        {keep_state, Data, [postpone]}
-    end;
 s19(cast, {APIPid, {timeout}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -552,6 +537,27 @@ s19(cast, {APIPid, {timeout}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_controller[s19]: Postponing not-ready event ~p~n", [{timeout}]),
+        {keep_state, Data, [postpone]}
+    end;
+s19(cast, {APIPid, {shutdown_ack}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_controller[s19]: Purging stale event ~p~n", [{shutdown_ack}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s19(cast, {APIPid, {shutdown_ack}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_controller[s19]: Callback had no clause for ~p, postponing~n", [{shutdown_ack}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s20, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s20, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_controller[s19]: Postponing not-ready event ~p~n", [{shutdown_ack}]),
         {keep_state, Data, [postpone]}
     end;
 s19(cast, {_StoragePid, {hard_ping}, Path}, Data) ->

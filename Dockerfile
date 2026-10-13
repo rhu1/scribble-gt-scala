@@ -1,41 +1,6 @@
 # syntax=docker/dockerfile:1.7
-FROM eclipse-temurin:21-jdk-jammy AS src
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-# Build the checked-out source by default. Set USE_GIT_CLONE=1 for a remote ref.
-ARG REPO_URL=https://github.com/rhu1/scribble-gt-scala.git
-ARG GIT_REF=artifact
-ARG USE_GIT_CLONE=0
-
-RUN apt-get update -y \
- && apt-get install -y --no-install-recommends git ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-
-# Stage local build context (used only when USE_GIT_CLONE=0)
-COPY . /tmp/local-src
-
-# Populate /scribble-gt-scala either by cloning or copying local context.
-RUN set -eux; \
-    cd /; \
-    rm -rf /scribble-gt-scala; \
-    mkdir -p /scribble-gt-scala; \
-    if [ "$USE_GIT_CLONE" = "1" ]; then \
-      if git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" /scribble-gt-scala; then \
-        : ; \
-      else \
-        git clone "${REPO_URL}" /scribble-gt-scala; \
-        cd /scribble-gt-scala; \
-        git checkout "${GIT_REF}"; \
-      fi; \
-      cd /scribble-gt-scala; \
-      git submodule update --init --recursive; \
-    else \
-      cp -a /tmp/local-src/. /scribble-gt-scala/; \
-    fi; \
-    rm -rf /tmp/local-src
-
-WORKDIR /scribble-gt-scala
+FROM scratch AS src
+COPY . /scribble-gt-scala
 
 
 FROM eclipse-temurin:21-jdk-jammy AS build

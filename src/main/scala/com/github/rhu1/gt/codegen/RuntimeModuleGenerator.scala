@@ -22,6 +22,7 @@ object RuntimeModuleGenerator {
   private case object ContinuePath extends PathEffect
   private case object SelectLeft extends PathEffect
   private case object SelectRight extends PathEffect
+  private case object SpeculateLeft extends PathEffect   // a receive that takes the left path without committing
 
   private sealed trait StateKind
   private object StateKind {
@@ -194,7 +195,7 @@ object RuntimeModuleGenerator {
     def selectedSide(effect: PathEffect): Option[String] = effect match {
       case SelectLeft   => Some("left")
       case SelectRight  => Some("right")
-      case ContinuePath => None
+      case _            => None
     }
 
     case class RecvKey(role: String, op: String, arity: Int)
@@ -220,6 +221,37 @@ object RuntimeModuleGenerator {
         .sortBy(_.entry.c)
         .lastOption
 
+    // When a receive commits. The EFSM keeps the right side's committing receive, the interrupt,
+    // enabled until the role commits. So a role is uncommitted in the mixed choice at `entry`
+    // exactly where it still offers that receive; the observer, which has none, only at the entry.
+    // A left transition commits when it leaves such a state for one that no longer offers it, for
+    // the end, or for the entry again, which ends a round. Any other left move out of the entry
+    // only speculates, as a left send does: the role takes the left path for what it sends next,
+    // without committing. Before this, every left move out of the entry committed, so C in Timeout
+    // committed on a2 and then purged TOc as stale.
+    def isStar(a: GTVAction): Boolean = a.isInstanceOf[GTVSendStar] || a.isInstanceOf[GTVEpsilonStar]
+
+    def uncommittedAt(x: GTVState, entry: GTVState): Boolean =
+      x == entry || {
+        val keys = interruptSpecs.filter(_.entry == entry).map(spec => recvKey(spec.event)).toSet
+        keys.nonEmpty && org.scribble.ext.gt.codegen.erlang.GTGenUtil.filterEdgesByState(efsm, x).asScala.exists {
+          case (k, targets) => k.right match {
+            case r: GTVRecv => keys.contains(recvKey(r)) && targets.asScala.exists(_.left.isInstanceOf[GTVEpsilonStar])
+            case _ => false
+          }
+        }
+      }
+
+    // For a receive transition: SelectRight and SelectLeft commit, SpeculateLeft does not.
+    def recvEffect(source: GTVState, action: GTVAction, target: GTVState): PathEffect =
+      if (isStar(action)) SelectRight
+      else enclosingMc(source) match {
+        case Some(entry) if uncommittedAt(source, entry) &&
+            (target == entry || isEndState(target) || !uncommittedAt(target, entry)) => SelectLeft
+        case _ if source.isEntry => SpeculateLeft
+        case _ => ContinuePath
+      }
+
     val needsInterruptCommitHelper: Boolean = stateList.exists { state =>
       if (!emitGC || !mcDescendants.contains(state)) false
       else {
@@ -233,16 +265,15 @@ object RuntimeModuleGenerator {
         }
       }
     }
-    val needsDirectReceiveCommitHelper: Boolean = stateList.exists { state =>
-      if (!emitGC || !mcDescendants.contains(state)) false
-      else {
-        val edges = org.scribble.ext.gt.codegen.erlang.GTGenUtil.filterEdgesByState(efsm, state)
-        edges.entrySet().asScala.exists { edge =>
-          edge.getKey.right.isInstanceOf[GTVRecv] &&
-          edge.getValue.asScala.exists(pair => selectedSide(pathEffect(state, pair.left)).nonEmpty)
-        }
-      }
-    }
+    def receiveEffects(state: GTVState): List[PathEffect] =
+      if (!emitGC || !mcDescendants.contains(state)) Nil
+      else org.scribble.ext.gt.codegen.erlang.GTGenUtil.filterEdgesByState(efsm, state).entrySet().asScala.toList
+        .filter(_.getKey.right.isInstanceOf[GTVRecv])
+        .flatMap(edge => edge.getValue.asScala.toList.map(pair => recvEffect(state, pair.left, pair.right)))
+    val needsDirectReceiveCommitHelper: Boolean =
+      stateList.exists(state => receiveEffects(state).exists(e => e == SelectLeft || e == SelectRight))
+    val needsSpeculateHelper: Boolean =
+      stateList.exists(state => receiveEffects(state).contains(SpeculateLeft))
     val needsCommitIfTakenHelper = needsInterruptCommitHelper || needsDirectReceiveCommitHelper
 
     // Export list: state functions and send helpers (only for non-end states)
@@ -319,7 +350,7 @@ object RuntimeModuleGenerator {
             case SelectRight =>
               val mcId = stateMcId.getOrElse(throw new IllegalStateException(s"Missing MC for right send at $s"))
               s"    Path = branch_path(${mcId}, right),\n    commit_current(${mcId}, right),\n"
-            case ContinuePath =>
+            case _ =>
               "    Path = current_path(),\n"
           }
         } else ""
@@ -438,7 +469,7 @@ object RuntimeModuleGenerator {
     def expectedPath(effect: PathEffect, mcId: String): String = effect match {
       case SelectLeft   => s"branch_path(${mcId}, left)"
       case SelectRight  => s"branch_path(${mcId}, right)"
-      case ContinuePath => "current_path()"
+      case _            => "current_path()"
     }
 
     def afterTransition(next: String): String =
@@ -455,15 +486,15 @@ object RuntimeModuleGenerator {
           def commitAndTransition(side: String): String =
             afterTransition(s"commit_if_taken(${next}, ${id}, ${side})")
 
-          val rightTargets = transitions.collect {
-            case (action, target) if pathEffect(s, action) == SelectRight && !isEndState(target) => localName(target)
-          }.toSet
-          val leftTargets = transitions.collect {
-            case (action, target) if pathEffect(s, action) == SelectLeft && !isEndState(target) => localName(target)
-          }.toSet -- rightTargets
-          val endEffects = transitions.collect {
-            case (action, target) if isEndState(target) => pathEffect(s, action)
-          }.toSet
+          val effects = transitions.map { case (action, target) => (recvEffect(s, action, target), target) }
+          def targetsWith(effect: PathEffect): Set[String] =
+            effects.collect { case (`effect`, target) if !isEndState(target) => localName(target) }.toSet
+          val rightTargets = targetsWith(SelectRight)
+          val leftTargets = targetsWith(SelectLeft) -- rightTargets
+          val speculateTargets = targetsWith(SpeculateLeft) -- rightTargets -- leftTargets
+          val endEffects = effects.collect { case (effect, target) if isEndState(target) => effect }.toSet
+          def speculateAndTransition: String =
+            afterTransition(s"speculate_if_taken(${next}, ${id}, left)")
 
           val targetCases =
             rightTargets.toList.sorted.flatMap(ns => List(
@@ -473,6 +504,10 @@ object RuntimeModuleGenerator {
             leftTargets.toList.sorted.flatMap(ns => List(
               s"          {next_state, ${ns}, _} -> ${commitAndTransition("left")};",
               s"          {next_state, ${ns}, _, _} -> ${commitAndTransition("left")};"
+            )) ++
+            speculateTargets.toList.sorted.flatMap(ns => List(
+              s"          {next_state, ${ns}, _} -> ${speculateAndTransition};",
+              s"          {next_state, ${ns}, _, _} -> ${speculateAndTransition};"
             ))
 
           val stopCases = endEffects.toList match {
@@ -724,6 +759,18 @@ object RuntimeModuleGenerator {
               |    end.
               |""".stripMargin
           } else ""
+        // A receive that leaves the entry without committing: take the left path, as a left send does.
+        val speculateIfTakenHelper =
+          if (needsSpeculateHelper) {
+            """
+              |speculate_if_taken(Next, McId, Side) ->
+              |    case Next of
+              |      {keep_state, _} -> Next;
+              |      {keep_state, _, _} -> Next;
+              |      _ -> set_current_path(branch_path(McId, Side)), Next
+              |    end.
+              |""".stripMargin
+          } else ""
 
         s"""
            |
@@ -768,7 +815,7 @@ object RuntimeModuleGenerator {
            |    set_current_path(Prefix ++ [Side]),
            |    ok.
            |
-           |${commitIfTakenHelper}
+           |${commitIfTakenHelper}${speculateIfTakenHelper}
            |${afterTransitionClauses.mkString(";\n")}.
            |
            |message_status(Path, Expected) ->

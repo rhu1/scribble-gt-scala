@@ -178,6 +178,36 @@ class RuntimeModuleGeneratorTest extends AnyFunSuite {
         }
     }
 
+    test("a receive commits only where the role stops offering the overrule (Timeout's C)") {
+        val out = Files.createTempDirectory("timeout-codegen-")
+        try {
+            Main.main(Array(
+                "examples/scribble/Timeout.scr",
+                "-gt-generate-efsms",
+                "Timeout",
+                "-out",
+                out.toString
+            ))
+
+            val genC = Files.readString(out.resolve("Timeout/gen_c.erl"))
+            val mcId = """enter_mc\((mc\d+)\)""".r.findFirstMatchIn(genC).map(_.group(1)).get
+            def clause(msg: String): String = (
+                s"(?s)(s\\d+\\(cast, \\{\\w+Pid, \\{${msg}\\}, Path\\}, Data\\) ->.*?" +
+                    "not_ready ->.*?\\n    end)"
+            ).r.findFirstIn(genC).get
+
+            // a2 does not commit C: B may still overrule with TOc, so C takes the left path
+            // for what it sends next and keeps TOc live.
+            val a2 = clause("a2")
+            assert(a2.contains(s"after_transition(speculate_if_taken(Next, ${mcId}, left))"))
+            assert(!a2.contains("commit_if_taken"))
+            // a3 commits C: B sends it only after committing to the left.
+            assert(clause("a3").contains(s"after_transition(commit_if_taken(Next, ${mcId}, left))"))
+        } finally {
+            deleteRecursively(out)
+        }
+    }
+
     private def deleteRecursively(path: Path): Unit = {
         if (Files.exists(path)) {
             val paths = Files.walk(path)

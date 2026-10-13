@@ -11,7 +11,7 @@
 
 # 1. <a name="INTRO"></a> Introduction
 
-## 1.1. Repository and image archives
+## 1.1. Repository
 
 This artifact accompanies the paper *Mixed Choice in Asynchronous Multiparty
 Session Types* by Laura Bocchi, Raymond Hu, Adriana Laura Voinea and Simon
@@ -20,16 +20,7 @@ Thompson, Proc. ACM Program. Lang. 10, OOPSLA (2026),
 ([arXiv:2602.23927](https://arxiv.org/abs/2602.23927)).
 
 This repository contains the artifact source code and this Markdown overview.
-The artifact's Zenodo record also has pre-built Docker images of the
-toolchain, one per architecture:
-
-- `scribble-gt-scala-v2-docker-amd64.tar.gz`: `linux/amd64` (most Linux and
-  Windows machines, Intel Macs)
-- `scribble-gt-scala-v2-docker-arm64.tar.gz`: `linux/arm64` (Apple Silicon
-  Macs, ARM Linux)
-
-See [3.1](#INITIAL) for how to load a pre-built image or build the image from
-this repository.
+See [3.1](#INITIAL) for how to build the Docker image from this repository.
 
 This Overview has the following sections:
 
@@ -85,24 +76,20 @@ The programmer can complete the program as follows.
         startup.  This may include:
         -   Launching a process for each role in the protocol.
         -   Distributing the initial contact information (process IDs) so the
-            roles know how to communicate with each other (the connection function generated in `<role>.erl` can be used for that.
+            roles know how to communicate with each other; the connection
+            function generated in `<role>.erl` can be used for this.
         -   Providing supervision of these processes for fault-tolerance.
 
 ---
 
 # 2. <a name="HARDWARE"></a> Hardware dependencies
 
-The Docker image runs on `linux/amd64` and `linux/arm64`, and Zenodo has a
-pre-built image for each (see [1.1](#INTRO)). A loaded image takes about 2 GB
-of disk. The pre-built images contain everything the examples and tests below
-need, so they also run without network access.
-
-Building the image yourself downloads and compiles Erlang/OTP, Elixir, and the
-Scala dependencies, so Docker must have network access and sufficient memory
-and disk space for those toolchains.
-An image built from a fresh clone or the source zip also fetches the RabbitMQ case study's
-third-party Erlang dependencies the first time its tests run, so it needs
-network access for that step.
+The Docker image builds and runs on `linux/amd64` and `linux/arm64`. A built
+image takes about 2 GB of disk. Building it downloads and compiles Erlang/OTP,
+Elixir, and the Scala dependencies, so Docker must have network access and
+sufficient memory and disk space for those toolchains. The RabbitMQ case
+study also fetches its third-party Erlang dependencies the first time its
+tests run, so it needs network access for that step.
 
 ---
 
@@ -122,33 +109,15 @@ network access for that step.
 
 **Steps** for starting from scratch.
 
-1. **Get the Docker image**, either by loading a pre-built one or by building
-   it from this repository.
+1. **Build the Docker image** from the repository root directory:
 
-   To load a pre-built image from Zenodo, use the archive for your machine's
-   architecture (see [1.1](#INTRO)):
-   ```sh
-   docker load -i scribble-gt-scala-v2-docker-amd64.tar.gz   # or ...-arm64.tar.gz
-   docker run -it --rm scribble-gt:v2
-   ```
-
-   To build the image instead, run from the repository root directory:
    ```sh
    docker build -t scribble-gt:local .
    docker run -it --rm scribble-gt:local
    ```
 
-   To build a remote branch instead of the current checkout, use:
-
-   ```sh
-   docker build --build-arg USE_GIT_CLONE=1 --build-arg GIT_REF=artifact -t scribble-gt:artifact .
-   ```
-
-   `GIT_REF` also accepts a tag, e.g. `v2` to build exactly this version.
-
-   Either way, `docker run -it` opens a shell in `/scribble-gt-scala` inside
-   the container. The commands below use the tag `scribble-gt:local`; use
-   `scribble-gt:v2` instead if you loaded a pre-built image.
+   `docker run -it` opens a shell in `/scribble-gt-scala` inside the
+   container. The commands below use the tag `scribble-gt:local`.
 
 2. **Optional quick (non-interactive) sanity checks**.
 
@@ -372,7 +341,7 @@ Minor syntax/notation differences.
   ```
   In the paper, we omitted the `A -> B` part as it can be easily
   inferred from the contents of the LHS and RHS brackets.
-- Our current implementation moves the `@` annotation in Fig. 7 (LHS) to here:
+- Our current implementation moves the `@` annotation in Fig. 8 (LHS) to here:
   ```
   mixed {
       ...                 // As in the Fig.
@@ -380,7 +349,7 @@ Minor syntax/notation differences.
       ...                 // As in the Fig but without the @ annotation.
   }
   ```
-- Our current implementation  moves the `*` annotation in Fig. 7 (RHS) to
+- Our current implementation moves the `*` annotation in Fig. 8 (RHS) to
   here:
   ```
   Stop*() from P to Q;
@@ -517,8 +486,7 @@ runtime I/O and event handling dynamics, and embedded MC mechanisms such as
 stale message purging. However, our minimal implementations do not necessarily
 perform the full application logic intended of each example."*
 
-See [3.3](#COMMANDS) for the command line instructions for running each
-example.
+See step 4 of [3.1](#INITIAL) for how to run each example.
 
 ---
 

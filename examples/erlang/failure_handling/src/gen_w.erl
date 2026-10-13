@@ -162,6 +162,27 @@ s7(cast, {_MPid, {more, {Payload}}, Path}, Data) ->
     end.
 
 -spec s8(cast, {pid(), {'Timeout'}, list()} | {pid(), {more, {term()}}, list()}, state_data()) -> {next_state, s6, state_data()} | {keep_state, state_data()} | {stop, normal, state_data()}.
+s8(cast, {MPid, {more, {Payload}}, Path}, Data) ->
+    case message_status(Path, current_path()) of
+      stale ->
+        io:format("gen_w[s8]: Purging stale event ~p~n", [{more, {Payload}}]),
+        {keep_state, Data};
+      ready ->
+        CallbackModule = get(callback_module),
+        Next = try CallbackModule:s8(cast, {MPid, {more, {Payload}}}, Data)
+               catch error:function_clause ->
+                 io:format("gen_w[s8]: Callback had no clause for ~p, postponing~n", [{more, {Payload}}]),
+                 {keep_state, Data, [postpone]}
+               end,
+        case Next of
+          {next_state, s6, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          {next_state, s6, _, _} -> after_transition(commit_if_taken(Next, mc1, left));
+          _ -> after_transition(Next)
+        end;
+      not_ready ->
+        io:format("gen_w[s8]: Postponing not-ready event ~p~n", [{more, {Payload}}]),
+        {keep_state, Data, [postpone]}
+    end;
 s8(cast, {FDPid, {'Timeout'}, Path}, Data) ->
     case message_status(Path, branch_path(mc1, right)) of
       stale ->
@@ -180,25 +201,6 @@ s8(cast, {FDPid, {'Timeout'}, Path}, Data) ->
         end;
       not_ready ->
         io:format("gen_w[s8]: Postponing not-ready event ~p~n", [{'Timeout'}]),
-        {keep_state, Data, [postpone]}
-    end;
-s8(cast, {MPid, {more, {Payload}}, Path}, Data) ->
-    case message_status(Path, current_path()) of
-      stale ->
-        io:format("gen_w[s8]: Purging stale event ~p~n", [{more, {Payload}}]),
-        {keep_state, Data};
-      ready ->
-        CallbackModule = get(callback_module),
-        Next = try CallbackModule:s8(cast, {MPid, {more, {Payload}}}, Data)
-               catch error:function_clause ->
-                 io:format("gen_w[s8]: Callback had no clause for ~p, postponing~n", [{more, {Payload}}]),
-                 {keep_state, Data, [postpone]}
-               end,
-        case Next of
-          _ -> after_transition(Next)
-        end;
-      not_ready ->
-        io:format("gen_w[s8]: Postponing not-ready event ~p~n", [{more, {Payload}}]),
         {keep_state, Data, [postpone]}
     end;
 s8(cast, {_MPid, {init, {Payload}}, Path}, Data) ->

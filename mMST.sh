@@ -34,7 +34,7 @@ usage() {
    -run-erlang-examples      Compile, run EUnit, start, and stop all Erlang OTP app examples
    -quiet-erlang-examples    With -run-erlang-examples, suppress per-app output (summary only)
    -clean-erlang-examples    Clean only Erlang OTP app examples
-  -clean-all                sbt clean, remove ./generated, and rebar3 clean on examples
+   -clean-all                sbt clean, remove ./generated, and clean Erlang examples
   -copy-erlang-demos <ProtocolName>
                             Copy generated gen_*.erl into examples/erlang/<protocol_name>/src
   -copy-all-erlang-demos    Copy gen_*.erl for all generated protocols into demos
@@ -155,30 +155,57 @@ while true; do
     esac
 done
 
+clean_erlang_example() {
+    local dir="$1"
+    local app
+    app=$(basename "$dir")
+
+    if [ "$app" = "rabbitmq-server" ]; then
+        if ! command -v gmake >/dev/null 2>&1; then
+            echo "Error: gmake is required to clean $app" >&2
+            return 1
+        fi
+        echo "GNU Make clean: $app/amqp_client"
+        rm -f "$dir/.erlang.mk/amqp_client.last-testdir-build"
+        (cd "$dir/deps/amqp_client" && gmake clean)
+    elif [ -f "$dir/rebar.config" ]; then
+        echo "Rebar3 clean: $app"
+        (cd "$dir" && rebar3 clean)
+    fi
+}
+
 if [ "$usage" = 1 ]; then
     usage
     exit 0
 elif [ "$run_clean_all" = 1 ]; then
+    clean_status=0
     echo "Cleaning sbt build..."
-    (cd "$SCRIBHOME" && sbt clean)
+    if ! (cd "$SCRIBHOME" && sbt clean); then
+        clean_status=1
+    fi
     echo "Removing generated/ directory..."
-    rm -rf "$SCRIBHOME/generated"
+    if ! rm -rf "$SCRIBHOME/generated"; then
+        clean_status=1
+    fi
     echo "Cleaning Erlang example builds..."
     for dir in "$SCRIBHOME/examples/erlang"/*/; do
         [ -d "$dir" ] || continue
-        echo "Rebar3 clean: $dir"
-        (cd "$dir" && rebar3 clean)
+        if ! clean_erlang_example "$dir"; then
+            clean_status=1
+        fi
     done
-    exit 0
+    exit "$clean_status"
 elif [ "$run_clean_erlang" = 1 ]; then
     ERL_DIR="$SCRIBHOME/examples/erlang"
+    clean_status=0
     echo "Cleaning Erlang example builds in: $ERL_DIR"
     for dir in "$ERL_DIR"/*/; do
         [ -d "$dir" ] || continue
-        echo "Rebar3 clean: $(basename "$dir")"
-        (cd "$dir" && rebar3 clean)
+        if ! clean_erlang_example "$dir"; then
+            clean_status=1
+        fi
     done
-    exit 0
+    exit "$clean_status"
 elif [ "$run_copy_erlang" = 1 ]; then
     SRC_DIR="$SCRIBHOME/generated/$PROTOCOL_NAME"
     # Convert CamelCase ProtocolName to snake_case demo folder
