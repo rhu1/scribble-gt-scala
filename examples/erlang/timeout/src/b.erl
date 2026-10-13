@@ -58,7 +58,7 @@ s5(internal, {'TOa'}, Data) ->
             io:format("B: s5 Sending TOa to A ~n", []),
             {next_state, s3, NewData, [{next_event, internal, {'TOc'}}]}
     end;
-s5(cast, {APid, {a1}}, #state_data{a_pid = APid} = Data) ->
+s5(cast, {APid, {a1}}, Data) ->
     io:format("B: s5 Received a1  from A ~p ~n", [APid]),
     case make_choice_a1(Data) of
         1 ->

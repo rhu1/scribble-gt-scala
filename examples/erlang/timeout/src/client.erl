@@ -48,10 +48,10 @@ s4(cast, {BPid, {'TOc'}}, Data) ->
 -spec s5(cast, {pid(), {atom(), term()}}, state_data()) ->
     {next_state, s6, state_data(), [{next_event, internal, {a5}}]} |
     {stop, normal, state_data()}.
-s5(cast, {BPid, {'TOc'}}, #state_data{b_pid = BPid} = Data) ->
+s5(cast, {BPid, {'TOc'}}, Data) ->
     io:format("C: s5 Received TOc  from B ~p ~n", [BPid]),
     {stop, normal, Data};
-s5(cast, {BPid, {a3}}, #state_data{b_pid = BPid} = Data) ->
+s5(cast, {BPid, {a3}}, Data) ->
     io:format("C: s5 Received a3  from B ~p ~n", [BPid]),
     {next_state, s6, Data, [{next_event, internal, {a5}}]}.
 
