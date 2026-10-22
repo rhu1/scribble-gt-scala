@@ -187,7 +187,7 @@ object CallbackModuleGenerator {
       if (kept.isEmpty) "{keep_state, state_data()}" else kept.mkString(" | ")
     }
 
-    // Determine immediate successor states of the initial state (kept for future use)
+    // Determine immediate successor states of the initial state
     val initEdges = org.scribble.ext.gt.codegen.erlang.GTGenUtil.filterEdgesByState(efsm, efsm.init)
     val firstAfterInit: Set[GTVState] = initEdges.values().asScala.flatMap(_.asScala.map(_.right)).toSet
 
@@ -198,7 +198,7 @@ object CallbackModuleGenerator {
         tmplRaw.substring(perStateTmplStart + "{{#states}}".length, perStateTmplEnd)
       else ""
 
-    // Helper views over EFSM edges for this method
+    // Helper views over EFSM edges
     type EdgePair = org.scribble.util.Pair[GTVAction, GTVState]
 
     def eventSetFor(state: GTVState, ev: AnyRef): List[EdgePair] = {
@@ -317,8 +317,14 @@ object CallbackModuleGenerator {
                 case Some(ns) => nextExprForSucc(efsm, ns, "Data")
                 case None     => "{keep_state, Data}"
               }
-              val headDataVar = if (connectHere) "Data0" else "Data"
-              val dataPattern = s"#state_data{${senderField} = ${roleVar}} = ${headDataVar}"
+              // The head checks the sender against the pid connect/1 found for its role, and a
+              // mismatch postpones the event. If connect/1 found none, as when that role had
+              // already stopped, any sender is taken. In the first state connect/1 has not run
+              // yet, so there is no check.
+              val found = capFirst(r.role.toString) + "Found"
+              val dataPattern = if (connectHere) "Data0" else s"#state_data{${senderField} = ${found}} = Data"
+              val guard = if (connectHere) "" else s"\n        when ${found} =:= ${roleVar}; ${found} =:= undefined"
+              val senderVar = if (connectHere) "_" + roleVar else roleVar
               val maybeConnect = if (connectHere) "    Data = connect(Data0),\n" else ""
               val varList = if (payloadVars.isEmpty) "[]" else s"[${payloadVars.mkString(", ")}]"
               val me = capFirst(roleAtom)
@@ -327,7 +333,7 @@ object CallbackModuleGenerator {
               val logFmt = s"${me}: ${sname} Received ${op}${placeholderSuffix} from ${from} ~n"
               val logLine = s"    io:format(\"${logFmt}\", ${varList}),\n"
               Some(s"""
-                |${sname}(cast, {${roleVar}, ${payloadPatWithVars}}, ${dataPattern}) ->
+                |${sname}(cast, {${senderVar}, ${payloadPatWithVars}}, ${dataPattern})${guard} ->
                 |${maybeConnect}${logLine}    ${finalExpr}
                 |""".stripMargin.trim)
             }
