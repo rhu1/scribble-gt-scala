@@ -208,6 +208,58 @@ class RuntimeModuleGeneratorTest extends AnyFunSuite {
         }
     }
 
+    // A protocol without a mixed choice; A's first state is a choice of sends.
+    private val PingPong =
+        """module PingPong;
+          |
+          |global protocol PingPong(role A, role B) {
+          |    rec Loop {
+          |        choice at A {
+          |            ping() from A to B;
+          |            pong() from B to A;
+          |            continue Loop;
+          |        } or {
+          |            stop() from A to B;
+          |        }
+          |    }
+          |}
+          |""".stripMargin
+
+    private def generatePingPong(out: Path): Path = {
+        val scr = out.resolve("PingPong.scr")
+        Files.writeString(scr, PingPong)
+        Main.main(Array(scr.toString, "-gt-generate-efsms", "PingPong", "-out", out.toString))
+        out.resolve("PingPong")
+    }
+
+    test("without a mixed choice, no path handling: nothing calls stale/1, which is not generated") {
+        val out = Files.createTempDirectory("no-mixed-choice-codegen-")
+        try {
+            val generated = generatePingPong(out)
+            for (role <- List("a", "b")) {
+                val gen = Files.readString(generated.resolve(s"gen_${role}.erl"))
+                assert(!gen.contains("stale("))
+                assert(!gen.contains("Path"))
+            }
+        } finally {
+            deleteRecursively(out)
+        }
+    }
+
+    test("a template whose first state is a choice of sends makes that choice in init") {
+        val out = Files.createTempDirectory("init-choice-codegen-")
+        try {
+            val a = Files.readString(generatePingPong(out).resolve("a.erl"))
+            for (op <- List("ping", "stop"))
+                assert((
+                    "(?s)init\\(\\[\\]\\) ->.*?case make_choice_(s\\d+)\\(Data\\) of.*?" +
+                        s"\\{ok, \\1, Data, \\[\\{next_event, internal, \\{${op}\\}\\}\\]\\}"
+                ).r.findFirstIn(a).nonEmpty)
+        } finally {
+            deleteRecursively(out)
+        }
+    }
+
     private def deleteRecursively(path: Path): Unit = {
         if (Files.exists(path)) {
             val paths = Files.walk(path)

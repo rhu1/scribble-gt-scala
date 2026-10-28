@@ -416,6 +416,13 @@ object CallbackModuleGenerator {
       "INIT_ACTIONS_RETURN" -> {
         if (initTauOps.size == 1)
           s"{ok, ${initialState}, Data, [{next_event, internal, {${erlAtom(initTauOps.head)}}}]}"
+        else if (initTauOps.size > 1) {
+          // A choice of sends first: pick one, as later states do with make_choice_.
+          val cases = initTauOps.zipWithIndex.map { case (op, i) =>
+            s"${i + 1} -> {ok, ${initialState}, Data, [{next_event, internal, {${erlAtom(op)}}}]}"
+          }.mkString(";\n        ")
+          s"case make_choice_${initialState}(Data) of\n        ${cases}\n    end"
+        }
         else s"{ok, ${initialState}, Data}"
       },
       "CONNECTION_BODY" -> connectionBody

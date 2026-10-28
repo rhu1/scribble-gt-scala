@@ -714,9 +714,9 @@ object RuntimeModuleGenerator {
 
       // when GC is enabled, a Path tagged message may arrive before the receiver
       // enters the mixed-choice region (e.g., sender tags at MC entry but receiver is still in a
-      // pre-MC state)
+      // pre-MC state). Only a role with a mixed choice can get one, and only its module has stale/1.
       val preMcTripleSafety: List[String] =
-        if (emitGC && !underMC0) {
+        if (emitGcHelpers && !underMC0) {
           List(
             s"""
                |${sname}(cast, {_From, _Msg, Path}, Data) ->
